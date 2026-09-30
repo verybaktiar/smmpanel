@@ -1,0 +1,56 @@
+/* R-31: kartu status layanan + dot hijau/merah agar sehat-tidaknya sistem terbaca sekilas. */
+.mon-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 16px; }
+.mon-svc { display: flex; gap: 12px; align-items: center; margin: 0; transition: transform .15s, border-color .15s; }
+.mon-svc:hover { transform: translateY(-2px); border-color: rgba(255,255,255,.18); }
+.mon-tile { width: 42px; height: 42px; border-radius: 12px; border: 1px solid; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.mon-svc-tx { flex: 1; min-width: 0; }
+.mon-svc-tx strong { font-size: 14px; display: block; }
+.mon-svc-tx .muted { font-size: 12.5px; }
+/* R-31: header kartu berikon + angka besar + bar proporsi agar ringkasan terbaca sekilas. */
+.mon-chead { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.mon-chead h3 { margin: 0; font-size: 14px; display: flex; gap: 8px; align-items: center; color: #c9c9cd; }
+.mon-chead a { font-size: 12.5px; color: #8ab4ff; text-decoration: none; }
+.mon-chead a:hover { text-decoration: underline; }
+.mon-bignum { font-size: 38px; font-weight: 700; line-height: 1.1; margin: 4px 0 8px; }
+.mon-bignum span { font-size: 13px; font-weight: 400; color: #9aa0aa; margin-left: 8px; }
+.mon-bar { height: 6px; border-radius: 9999px; background: rgba(255,255,255,.07); overflow: hidden; margin-bottom: 10px; }
+.mon-bar > div { height: 100%; border-radius: 9999px; background: linear-gradient(90deg, #00a87e, #4ade80); transition: width .4s; }
+.dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.dot.on { background: #4ade80; box-shadow: 0 0 8px rgba(74,222,128,.7); }
+.dot.off { background: #ff7a86; box-shadow: 0 0 8px rgba(255,122,134,.7); }
+.like-stat { display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: #9aa0aa; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,.06); }
+.like-stat strong { color: #fff; font-size: 16px; }
+.like-stat .ok { color: #4ade80; }
+.like-stat .warn { color: #fbbf24; }
+.like-stat .bad { color: #ff7a86; }
+.run-done { font-size: 13px; margin: 10px 0 0; }
+.run-done a { color: #8ab4ff; }
+@media (max-width: 900px) {
+  .mon-grid { grid-template-columns: repeat(2, 1fr); }
+}
+/* R-03: di layar sangat sempit kartu layanan satu kolom agar tidak meluber. */
+@media (max-width: 560px) {
+  .mon-grid { grid-template-columns: 1fr; }
+}
+
+/* Grafik engagement harian: batang bertumpuk per jenis aksi.
+   Rentang panjang = batang menyempit otomatis (lebar via flex + max-width). */
+.eng-chart { display: flex; align-items: flex-end; gap: 5px; height: 140px; padding: 6px 2px 0; }
+.eng-col { flex: 1 1 0; display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; }
+.eng-bars { display: flex; align-items: flex-end; gap: 2px; height: 110px; width: 100%; justify-content: center; }
+.eng-b { width: 9px; border-radius: 3px 3px 0 0; min-height: 2px; transition: height .3s; flex-shrink: 1; min-width: 2px; }
+/* Rentang 30/90 hari: batang & gap menyempit, lebar mengikuti ruang kolom */
+.eng-chart.range-30 .eng-b { width: 70%; max-width: 9px; }
+.eng-chart.range-30 .eng-bars { gap: 1px; }
+.eng-chart.range-90 .eng-b { width: 82%; max-width: 7px; }
+.eng-chart.range-90 .eng-bars { gap: 0; }
+.eng-chart.range-90 .eng-col { gap: 2px; }
+.eng-b.comment { background: #494fdf; }
+.eng-b.dm { background: #e61e49; }
+.eng-b.story { background: #00a87e; }
+.eng-day { font-size: 9.5px; color: #6d7680; white-space: nowrap; }
+.eng-legend { display: flex; gap: 14px; margin-top: 10px; font-size: 12px; color: #9aa0aa; flex-wrap: wrap; }
+.eng-legend i { display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 6px; }
+.eng-tooltip { position: relative; }
+.eng-col:hover .eng-tip { opacity: 1; }
+.eng-tip { position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); background: #191c1f; border: 1px solid rgba(255,255,255,.15); border-radius: 8px; padding: 6px 9px; font-size: 11px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity .15s; z-index: 2; color: #fff; }

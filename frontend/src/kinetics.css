@@ -1,0 +1,40 @@
+/* Kinetics global (dipasang sekali via main.jsx) — dua efek dari library kinetics.
+   Read proyek (terkunci dari audit): ops console flat-dark, dial ENERGY 2 / RHYTHM 2 / MOTION 2. */
+
+/* Push Button (kinetics, .agents/skills/kinetics/references/push-button.md):
+   umpan balik tekan semua tombol panel. Kurva 0.06s dari library dipertahankan.
+   Alasan R-31: bayangan bawah 3D TIDAK dipakai karena identitas panel flat-dark (R-20);
+   tekan disampaikan lewat translate + dim sehingga bahasa "mekanis" tetap terasa tanpa
+   menabrak bahasa visual flat. */
+button { transition: transform 0.06s ease, filter 0.06s ease; }
+button:active:not(:disabled) { transform: translateY(1px); filter: brightness(0.88); }
+
+/* Toggle Pills (kinetics): aksen latar tombol aktif tab pindah dengan spring scale,
+   alih-alih lompat langsung. Kurva spring cubic-bezier(0.34,1.56,0.64,1) 0.5s dari library. */
+.seg button { transition: background 0.25s ease, border-color 0.25s ease, color 0.25s ease; }
+.seg button.on { animation: kin-pill-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); }
+@keyframes kin-pill-pop { 0% { transform: scale(1); } 35% { transform: scale(1.06); } 100% { transform: scale(1); } }
+
+/* Tab Pill Glide (kinetics, references/tab-pill-glide.md): pil indikator meluncur di belakang
+   tab aktif. Posisi/lebar diatur JS (KSeg.jsx) dengan mengukur tombol target; kurva 0.4s
+   cubic-bezier(0.65,0,0.35,1) dari library dipertahankan. Warna via currentColor yang diisi
+   KSeg dari border-color tombol aktif. Pil tampak menembus latar tombol yang translusen;
+   warna tab aktif sendiri crossfade dari transisi .seg button yang sudah ada. */
+.kin-seg { position: relative; }
+.kin-seg-pill {
+  position: absolute;
+  border-radius: 9999px;
+  background: currentColor;
+  opacity: .18;
+  pointer-events: none;
+  transition: left 0.4s cubic-bezier(0.65, 0, 0.35, 1), width 0.4s cubic-bezier(0.65, 0, 0.35, 1),
+              top 0.4s cubic-bezier(0.65, 0, 0.35, 1), height 0.4s cubic-bezier(0.65, 0, 0.35, 1);
+}
+
+/* prefers-reduced-motion: semua gerak di atas dibuang, umpan balik tinggal perubahan warna. */
+@media (prefers-reduced-motion: reduce) {
+  button { transition: none; }
+  button:active:not(:disabled) { transform: none; }
+  .seg button.on { animation: none; }
+  .kin-seg-pill { transition: none; }
+}

@@ -1,0 +1,115 @@
+/* Dial: ENERGY 2 / RHYTHM 2 / MOTION 2. Count-up dan rise-in memandu mata ke metrik kunci (R-19). */
+/* Dashboard pilot — gelap premium + identitas platform */
+.dash { margin: 0 auto; padding: 28px 24px 60px; color: #fff; animation: rise .45s ease; width: 100%; }
+@keyframes rise { from { opacity: 0; transform: translateY(10px); } }
+.dash-hero { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; }
+.dash-hero h1 { font-size: 34px; font-weight: 650; letter-spacing: -.6px; margin: 0;
+  background: linear-gradient(100deg, #ffffff 30%, #c7cbff 75%, #f0a6c8); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.dash-hero p { color: #8d969e; margin: 4px 0 0; font-size: 14px; }
+.eyebrow { font-size: 11px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: #a5aaff; margin-bottom: 4px; }
+/* Aksi cepat */
+/* R-31: hero band gradien menandai kepala halaman sekaligus wadah sapaan, ringkasan, dan aksi. */
+.hero-top { background: linear-gradient(120deg, rgba(73,79,223,.16), rgba(221,42,123,.07) 55%, transparent), rgba(255,255,255,.02);
+  border: 1px solid rgba(255,255,255,.09); border-radius: 20px; padding: 22px 24px; margin-bottom: 16px;
+  display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+.hero-sum { display: flex; gap: 16px; flex-wrap: wrap; margin: 6px 0 14px; font-size: 13px; color: #8d969e; }
+.hero-sum i.dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; margin-right: 7px; }
+.hero-sum i.dot.ok { background: #00a87e; } .hero-sum i.dot.warn { background: #ec7e00; }
+.quick { display: flex; gap: 8px; flex-wrap: wrap; }
+.quick a svg { vertical-align: -2px; margin-right: 7px; }
+.quick a.q-fb svg { color: #5ea1ff; } .quick a.q-ig svg { color: #f06292; }
+.live-pill { background: rgba(0,168,126,.12); border: 1px solid rgba(0,168,126,.35); border-radius: 9999px; padding: 7px 14px; flex-shrink: 0; }
+.live-age { color: #8d969e; font-weight: 500; letter-spacing: 0; font-size: 11px; }
+.quick a { background: rgba(244,244,244,.07); border: 1px solid rgba(255,255,255,.09); color: #f4f4f4; border-radius: 9999px; padding: 9px 18px; font-size: 13px; font-weight: 600; text-decoration: none; transition: .18s; }
+.quick a:hover { background: #494fdf; border-color: #494fdf; transform: translateY(-1px); }
+.quick a.q-fb:hover { background: rgba(24,119,242,.25); border-color: #1877F2; }
+.quick a.q-ig:hover { background: rgba(221,42,123,.22); border-color: #DD2A7B; }
+.dash-live { font-size: 12px; font-weight: 700; letter-spacing: .1em; color: #2dd4a7; display: flex; gap: 8px; align-items: center; }
+.dot-live { width: 9px; height: 9px; border-radius: 50%; background: #00a87e; }
+.dash-error { background: rgba(226,59,74,.12); border: 1px solid #e23b4a; border-radius: 12px; padding: 12px 16px; margin-bottom: 16px; }
+.loading { display: flex; align-items: center; gap: 10px; color: #8d969e; font-size: 13px; padding: 18px; }
+.loading::before { content: ''; width: 16px; height: 16px; border: 2px solid rgba(255,255,255,.25); border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.stat-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 18px; }
+.stat { background: linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.015)); border: 1px solid rgba(255,255,255,.09); border-radius: 20px; padding: 18px; }
+.stat .num { font-size: 30px; font-weight: 600; }
+.stat .num.ok { color: #2dd4a7; } .stat .num.bad { color: #ff7a86; } .stat .num.warn { color: #fbbf24; }
+.stat .lbl { color: #8d969e; font-size: 12px; margin-top: 3px; }
+.plat-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 18px; }
+.card { background: linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,.012)); border: 1px solid rgba(255,255,255,.09); border-radius: 20px; padding: 20px; }
+.plat-fb { border-top: 3px solid #1877F2; background: linear-gradient(165deg, rgba(24,119,242,.20), rgba(24,119,242,.03) 55%, rgba(255,255,255,.012)); }
+.plat-ig { border-top: 3px solid #DD2A7B; background: linear-gradient(165deg, rgba(221,42,123,.20), rgba(129,52,175,.07) 55%, rgba(255,255,255,.012)); box-shadow: 0 -8px 24px -12px rgba(221,42,123,.45); }
+.plat-tt { border-top: 3px solid #25F4EE; background: linear-gradient(165deg, rgba(37,244,238,.11), rgba(37,244,238,.02) 55%, rgba(255,255,255,.012)); }
+.plat-head { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; }
+.plat-head h3 { margin: 0; font-size: 16px; }
+.plat-ic { width: 30px; height: 30px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-weight: 700; }
+.plat-fb .plat-ic { background: rgba(24,119,242,.2); color: #5ea1ff; }
+.plat-ig .plat-ic { background: rgba(221,42,123,.18); color: #f06292; }
+.plat-tt .plat-ic { background: rgba(37,244,238,.12); color: #25F4EE; }
+.plat-num { font-size: 28px; font-weight: 600; } .plat-num span { color: #8d969e; font-size: 18px; }
+.plat-bar { height: 5px; background: rgba(255,255,255,.08); border-radius: 9999px; margin: 10px 0 8px; overflow: hidden; }
+.plat-bar > div { height: 100%; border-radius: 9999px; transition: width 1s ease; }
+.plat-fb .plat-bar > div { background: #1877F2; }
+.plat-ig .plat-bar > div { background: linear-gradient(90deg, #F58529, #DD2A7B); }
+.plat-tt .plat-bar > div { background: #25F4EE; }
+.plat-card { text-decoration: none; color: inherit; display: block; animation: rise .5s ease backwards; transition: transform .18s, box-shadow .18s; }
+.plat-card:hover { transform: translateY(-3px); }
+.plat-fb.plat-card:hover { transform: translateY(-3px); }
+.plat-ig.plat-card:hover { transform: translateY(-3px); box-shadow: 0 12px 32px -12px rgba(221,42,123,.5); }
+.plat-tt.plat-card:hover { transform: translateY(-3px); }
+.stat { transition: transform .18s; } .stat:hover { transform: translateY(-2px); }
+/* R-14: Akun Aktif adalah metrik operasi utama, border aksen menandainya. Error merah hanya saat > 0. */
+.stat-hero { border-color: rgba(73,79,223,.5); background: linear-gradient(180deg, rgba(73,79,223,.12), rgba(255,255,255,.015)); }
+.stat-alert { border-color: rgba(226,59,74,.45); }
+/* Feed aktivitas */
+.logs { list-style: none; margin: 0; padding: 0; font-size: 13px; line-height: 2; }
+.logs .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 9px; vertical-align: 1px; }
+.dot.ok { background: #00a87e; }
+.dot.warn { background: #ec7e00; } .dot.bad { background: #e23b4a; }
+.feed-status { color: #8d969e; margin-left: 6px; }
+/* R-19: sorot 3 dtk pada aktivitas yang baru masuk agar mata menangkap kejadian. */
+.logs li.fresh { animation: fresh 3s ease; border-radius: 8px; }
+@keyframes fresh { 0% { background: rgba(73,79,223,.30); } 100% { background: transparent; } }
+.logs .badge { margin-left: 8px; }
+.feed-time { color: #9aa0aa; margin-left: 8px; font-size: 12px; }
+/* R-31: antrean bergaya timeline agar waktu jadi fokus utama, bukan teks. Ikon kalender-jam SVG, bukan emoji. */
+.queue-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+.queue-head h3 { margin: 0; }
+.queue-count { font-size: 11px; font-weight: 600; background: rgba(236,126,0,.15); color: #fbbf24; border-radius: 9999px; padding: 3px 11px; }
+.queue-empty { text-align: center; padding: 22px 10px 14px; }
+.queue-ic { width: 44px; height: 44px; stroke: #494fdf; fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; margin-bottom: 8px; }
+.queue-empty b { display: block; font-size: 14px; margin-bottom: 4px; }
+.queue-empty p { color: #8d969e; font-size: 12.5px; margin: 0 0 14px; }
+.btn-go { display: inline-block; background: #494fdf; color: #fff; text-decoration: none; border-radius: 9999px; padding: 10px 24px; font-size: 13px; font-weight: 600; }
+.btn-go:hover { opacity: .88; }
+.queue-list { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; }
+.queue-list li { display: flex; align-items: center; gap: 12px; padding: 11px 4px; border-bottom: 1px solid rgba(255,255,255,.05); font-size: 13px; }
+.queue-list li:last-child { border-bottom: none; }
+.time-chip { flex-shrink: 0; font-size: 11px; font-weight: 600; color: #fbbf24; background: rgba(236,126,0,.12); border-radius: 8px; padding: 5px 10px; min-width: 86px; text-align: center; }
+.queue-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.queue-main span { color: #8d969e; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* R-31: status sistem bergaya baris berlabel agar nilai (pill) sejajar kanan dan mudah dipindai. */
+.sys2 { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; }
+.sys2 li { display: flex; align-items: center; gap: 12px; padding: 10px 4px; border-bottom: 1px solid rgba(255,255,255,.05); font-size: 13px; }
+.sys2 li:last-child { border-bottom: none; }
+.sys-ic { width: 30px; height: 30px; border-radius: 9px; background: rgba(255,255,255,.05); display: inline-flex; align-items: center; justify-content: center; color: #a5aaff; font-size: 14px; flex-shrink: 0; }
+.sys-label { flex: 1; }
+.dot-live.sm { width: 7px; height: 7px; display: inline-block; border-radius: 50%; background: #00a87e; margin-right: 5px; vertical-align: 1px; }
+.live-count { background: rgba(0,168,126,.14); color: #2dd4a7; }
+/* R-31: baris aktivitas sejajar kolom (nama, platform, status, waktu) agar riwayat terbaca sebagai tabel. */
+/* R-03: di 320px waktu turun ke baris kedua (tetap rata kanan via margin-left:auto) dan nama menyusut
+   dengan ellipsis; kolom 110px tetap sejajar di layar lebar, jadi R-31 tidak dikorbankan. */
+.feed-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; row-gap: 2px; }
+.feed-row b { min-width: 110px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.feed-row .feed-time { margin-left: auto; white-space: nowrap; }
+.plat-sub { color: #8d969e; font-size: 12px; margin-top: 2px; }
+.dash-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.dash-grid h3 { margin: 0 0 12px; font-size: 16px; }
+.sys, .logs { list-style: none; margin: 0; padding: 0; font-size: 13px; line-height: 2; }
+.sys .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; }
+.sys .dot.ok { background: #00a87e; } .sys .dot.warn { background: #ec7e00; }
+.logs span { color: #9aa0aa; } .muted { color: #8d969e; }
+@media (max-width: 720px) { .stat-row, .plat-row, .dash-grid { grid-template-columns: 1fr; } }
+/* R-03: di 360px pill LIVE + umur meluber 37px (flex-shrink:0). Umur disembunyikan di sini
+   karena kartu Status Sistem sudah menampilkan "data X dtk lalu"; titik LIVE tetap ada. */
+@media (max-width: 360px) { .dash-live .live-age { display: none; } }

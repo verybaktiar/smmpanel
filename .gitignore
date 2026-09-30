@@ -1,0 +1,24 @@
+node_modules/
+database.db
+*.bak
+sessions/
+*.log
+.env
+backups/
+uploads/
+logs/
+farm-shots/
+.freebuff/
+arsip/
+frontend/dist/
+# Data sensitif operasional: jangan pernah masuk repo
+th-key.txt
+proxies-pool.txt
+akun-th.txt
+example-accounts.txt
+test-import.txt
+.ig-session.txt
+th-chat-allfree-result.json
+th-models.json
+th-r9-stability.json
+th-stability.json

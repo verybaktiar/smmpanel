@@ -1,0 +1,29 @@
+/* Dial: ENERGY 2 / RHYTHM 2 / MOTION 1. Hero biru FB menandai teritori halaman (R-20). Tab Aktif default agar tembok 46 checkpoint tidak mendominasi (C-3). */
+.hero-top { background: rgba(255,255,255,.02); border: 1px solid rgba(255,255,255,.09); border-radius: 20px; padding: 22px 24px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+.quick { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.quick a { background: rgba(244,244,244,.07); border: 1px solid rgba(255,255,255,.09); color: #f4f4f4; border-radius: 9999px; padding: 9px 18px; font-size: 13px; font-weight: 600; text-decoration: none; min-height: 44px; display: inline-flex; align-items: center; }
+.quick a.q-fb:hover { background: rgba(24,119,242,.25); border-color: #1877F2; }
+.stat .num.ok { color: #2dd4a7; }
+.stat-hero { border-color: rgba(73,79,223,.5); background: linear-gradient(180deg, rgba(73,79,223,.12), rgba(255,255,255,.015)); }
+.queue-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+.queue-head h3 { margin: 0; }
+.hero-fb2 { background: linear-gradient(120deg, rgba(24,119,242,.22), rgba(24,119,242,.04) 55%, transparent), rgba(255,255,255,.02); }
+.fb-eyebrow { color: #5ea1ff; }
+.hero-num { text-align: center; flex-shrink: 0; background: rgba(24,119,242,.14); border: 1px solid rgba(24,119,242,.4); border-radius: 20px; padding: 14px 26px; }
+.hero-num span { display: block; font-size: 40px; font-weight: 650; color: #5ea1ff; }
+.hero-num small { color: #8d969e; font-size: 12px; }
+/* Segmented control: satu pilihan terlihat, bukan dropdown tersembunyi. */
+.seg { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; align-items: center; }
+.seg button { background: rgba(244,244,244,.06); border: 1px solid rgba(255,255,255,.09); color: #c9c9cd; border-radius: 9999px; padding: 8px 18px; font-size: 12.5px; font-weight: 600; cursor: pointer; min-height: 44px; }
+.seg button.on { background: rgba(24,119,242,.22); border-color: #1877F2; color: #fff; }
+/* Tab Pill Glide: aksen pill mengikuti biru FB (R-31, tanpa baca computed style). */
+.seg.kin-seg { --kin-seg-accent: #1877F2; }
+.seg-search { margin-left: auto; max-width: 240px; }
+.acc-cell { display: flex; align-items: center; gap: 10px; }
+.acc-avatar { width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; color: #fff; flex-shrink: 0; }
+.acc-name { font-weight: 600; } .acc-email { font-size: 11.5px; color: #8d969e; margin-top: 1px; }
+tr.row-dead { opacity: .55; } tr.row-dead:hover { opacity: .9; }
+.loading { display: flex; align-items: center; gap: 10px; color: #8d969e; font-size: 13px; padding: 18px; }
+.loading::before { content: ''; width: 16px; height: 16px; border: 2px solid rgba(255,255,255,.25); border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (max-width: 720px) { .hero-num { display: none; } .seg-search { margin-left: 0; max-width: none; width: 100%; } }
