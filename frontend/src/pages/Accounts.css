@@ -121,3 +121,30 @@ tr.row-dead { opacity: .55; } tr.row-dead:hover { opacity: .9; }
 .modal { background: #1c1f24; border: 1px solid rgba(255,255,255,.1); border-radius: 20px; padding: 24px; width: 380px; display: flex; flex-direction: column; gap: 12px; }
 .modal h3 { margin: 0 0 4px; } .modal label { font-size: 12px; color: #8d969e; display: flex; flex-direction: column; gap: 6px; }
 .modal-btns { display: flex; gap: 8px; justify-content: flex-end; margin-top: 6px; }
+/* Proxy/session pill di tabel = tombol klik utk edit */
+button.pill { cursor: pointer; font-family: inherit; transition: filter .15s; }
+button.pill:hover { filter: brightness(1.3); }
+/* Hint di modal proxy: penjelasan sticky session DataImpulse */
+.modal-hint { margin: 0; font-size: 12px; color: #8d969e; line-height: 1.55; }
+.modal-hint b { color: #d6d9de; }
+.modal-hint code { background: rgba(255,255,255,.06); border-radius: 6px; padding: 1px 6px; font-size: 11.5px; color: #f0b429; }
+/* Kolom IP Terakhir: pill klikable -> modal riwayat IP */
+.ip-cell { background: transparent; border: none; color: inherit; text-align: left; padding: 0; cursor: pointer; display: flex; flex-direction: column; gap: 1px; font-family: inherit; }
+.ip-cell:hover .ip-mono { color: #8fb4ff; }
+.ip-mono { font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; font-size: 12.5px; color: #e8eaee; }
+.ip-loc { font-size: 11px; color: #8d969e; }
+/* Alert: IP terakhir akun di luar Indonesia -> sel merah berdenyut */
+.ip-warn .ip-mono { color: #ff7a86; }
+.ip-warn .ip-loc { color: #ff7a86; }
+.ip-warn { animation: ipPulse 2.2s ease-in-out infinite; border-radius: 8px; }
+@keyframes ipPulse { 0%, 100% { opacity: 1; } 50% { opacity: .55; } }
+@media (prefers-reduced-motion: reduce) { .ip-warn { animation: none; } }
+/* Daftar riwayat IP di modal */
+.iph-list { max-height: 300px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; margin: 4px 0; }
+.iph-empty { padding: 14px 4px; font-size: 12.5px; }
+.iph-row { display: grid; grid-template-columns: 130px 1fr auto auto; gap: 10px; align-items: baseline; padding: 7px 8px; border-radius: 8px; font-size: 12px; }
+.iph-row:nth-child(odd) { background: rgba(255,255,255,.03); }
+.iph-row.iph-bad { color: #ff7a86; }
+.iph-loc { color: #b9bfc7; }
+.iph-src { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: #7b8590; border: 1px solid rgba(255,255,255,.1); border-radius: 9999px; padding: 1px 8px; }
+.iph-time { color: #7b8590; font-variant-numeric: tabular-nums; }
