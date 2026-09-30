@@ -53,12 +53,14 @@ function build({ title, message, okLabel, cancelLabel, danger, icon }) {
     inject();
     // R-32: simpan pemicu agar fokus kembali ke sana setelah dialog ditutup.
     const prevFocus = document.activeElement;
+    // R-32: judul dikaitkan via aria-labelledby, ID unik jaga-jaga dialog bertumpuk.
+    const uid = 'dlg-' + Math.random().toString(36).slice(2, 8);
     const ov = document.createElement('div');
     ov.className = 'dlg-ov';
     ov.innerHTML = `
-      <div class="dlg" role="dialog" aria-modal="true">
+      <div class="dlg" role="dialog" aria-modal="true" aria-labelledby="${uid}">
         <div class="dlg-icon${danger ? ' bad' : ''}"></div>
-        <div class="dlg-title"></div>
+        <div class="dlg-title" id="${uid}"></div>
         <div class="dlg-msg"></div>
         <div class="dlg-btns">
           ${cancelLabel ? '<button type="button" class="dlg-btn dlg-cancel"></button>' : ''}

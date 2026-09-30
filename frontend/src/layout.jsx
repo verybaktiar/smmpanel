@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import Icon from './icons.jsx';
 import './layout.css';
@@ -73,6 +73,8 @@ export default function Layout() {
     // biarkan grup platform yang menyala; /akun polos hanya untuk Semua Akun.
     return loc.pathname === to && !loc.search;
   };
+  const menuBtnRef = useRef(null);
+  const sideRef = useRef(null);
   const [groups, setGroups] = useState(() => {
     try { return JSON.parse(localStorage.getItem('smm-nav') || '{}'); }
     catch { return {}; }
@@ -83,10 +85,34 @@ export default function Layout() {
     try { localStorage.setItem('smm-nav', JSON.stringify(n)); } catch { /* abaikan */ }
     return n;
   });
+  // R-32: drawer nav di layar kecil adalah modal tipis. Escape menutup, fokus masuk
+  // ke tautan pertama saat terbuka, dan kembali ke tombol Menu saat tertutup.
+  // open=true tak mungkin tercapai di desktop (tombol Menu tersembunyi), jadi tanpa guard media query.
+  useEffect(() => {
+    if (!open) return;
+    const esc = (e) => { if (e.key === 'Escape') setOpen(false); };
+    window.addEventListener('keydown', esc);
+    return () => window.removeEventListener('keydown', esc);
+  }, [open]);
+  useEffect(() => {
+    if (!sideRef.current) return;
+    if (open) {
+      const first = sideRef.current.querySelector('a, button');
+      if (first) first.focus();
+    } else if (sideRef.current.contains(document.activeElement)
+      && menuBtnRef.current && getComputedStyle(menuBtnRef.current).display !== 'none') {
+      menuBtnRef.current.focus();
+    }
+  }, [open]);
   return (
     <div className="app">
-      <div className={`nav-overlay${open ? ' show' : ''}`} onClick={() => setOpen(false)} />
-      <aside className={`sidebar${open ? ' open' : ''}`}>
+      {/* Overlay penutup drawer: murni sentuh, disembunyikan dari pembaca layar. */}
+      <div
+        className={`nav-overlay${open ? ' show' : ''}`}
+        aria-hidden="true"
+        onClick={(e) => { if (e.target === e.currentTarget) setOpen(false); }}
+      />
+      <aside id="side-nav" ref={sideRef} className={`sidebar${open ? ' open' : ''}`} aria-label="Navigasi utama">
         <div className="brand"><div className="logo"><Icon name="bolt" size={17} /></div> SMM AutoPost</div>
         {GROUPS.map((g, i) => (
           <div key={i}>
@@ -109,7 +135,7 @@ export default function Layout() {
       </aside>
       <main className="main">
         <div className="topbar">
-          <button className="menu-btn" onClick={() => setOpen(true)} aria-label="Menu">☰</button>
+          <button ref={menuBtnRef} className="menu-btn" onClick={() => setOpen(true)} aria-label="Buka menu navigasi" aria-expanded={open} aria-controls="side-nav">☰</button>
           <span className="topbar-title">SMM AutoPost</span>
         </div>
         <div onClick={() => setOpen(false)}>
