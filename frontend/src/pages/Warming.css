@@ -1,0 +1,40 @@
+/* R-31: hero memikul status (satu titik fokus: hidup/mati + jalan kapan),
+   kartu jadwal dipecah baris jadwal/manual/persenjataan sesuai bobot risiko,
+   baris persenjataan bergaris amber karena satu-satunya kontrol berisiko. */
+.warm-note { font-size: 12.5px; margin: 10px 0 0; }
+.farm-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.farm-row .inp { flex: 1; min-width: 0; }
+.row-appr { background: rgba(251,191,36,.05); }
+.row-appr:hover { background: rgba(251,191,36,.09); }
+.mon-bar { height: 6px; border-radius: 9999px; background: rgba(255,255,255,.07); overflow: hidden; }
+.mon-bar > div { height: 100%; border-radius: 9999px; background: linear-gradient(90deg, #494fdf, #e61e49); transition: width .4s; }
+.farm-msg { font-size: 13px; margin: 0 0 12px; padding: 10px 14px; border-radius: 12px; }
+.farm-msg.ok { color: #4ade80; background: rgba(74,222,128,.08); border: 1px solid rgba(74,222,128,.3); }
+.farm-msg.bad { color: #ff7a86; background: rgba(226,59,74,.08); border: 1px solid rgba(226,59,74,.35); }
+
+/* R-31: tabel boleh lebar, tapi scroll di dalam kartu, bukan mendorong halaman (R-03). */
+.table-wrap { overflow-x: auto; }
+.table-wrap .tbl { min-width: 560px; }
+
+/* R-31: hero dua sisi, status kanan agar keputusan hidup/mati terbaca sekilas. */
+.warm-hero { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+.warm-state { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; padding-top: 4px; }
+.warm-next { font-size: 12.5px; color: #9aa0aa; }
+
+/* R-31: kepala kartu jadwal menaruh bukti terakhir sejajar judul, bukan paragraf terpisah. */
+.warm-sched-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.warm-sched-head h3 { margin: 0 0 10px; }
+.warm-times { margin-bottom: 8px; }
+.warm-times .inp { font-family: ui-monospace, monospace; max-width: 260px; }
+
+/* R-31: persenjataan dipisah sebagai baris bahaya agar tak kepencet sambil atur jam. */
+.warm-arm { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; margin-top: 12px;
+  padding: 10px 12px; border: 1px solid rgba(251,191,36,.35); border-radius: 12px;
+  background: rgba(251,191,36,.05); cursor: pointer; }
+.warm-arm input { width: 18px; height: 18px; margin-top: 1px; accent-color: #fbbf24; flex-shrink: 0; }
+
+@media (max-width: 640px) {
+  .warm-state { align-items: flex-start; }
+  .warm-times .inp { max-width: none; }
+  .warm-sched .btn-ghost, .warm-sched .btn-primary { min-height: 44px; }
+}

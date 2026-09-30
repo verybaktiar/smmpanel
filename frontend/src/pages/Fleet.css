@@ -1,0 +1,207 @@
+/* Fleet HP — monitoring dashboard ala NOC */
+
+/* ==== KPI row ==== */
+.fleet-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.fleet-kpi {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--line, #2a2f3a);
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.01));
+  min-height: 74px;
+}
+
+.fleet-kpi-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  background: rgba(99, 102, 241, 0.15);
+  color: #818cf8;
+}
+.fleet-kpi-icon svg { width: 22px; height: 22px; }
+.fleet-kpi.kpi-ok .fleet-kpi-icon { background: rgba(34, 197, 94, 0.14); color: #4ade80; }
+.fleet-kpi.kpi-warn .fleet-kpi-icon { background: rgba(245, 158, 11, 0.14); color: #fbbf24; }
+.fleet-kpi.kpi-bad .fleet-kpi-icon { background: rgba(239, 68, 68, 0.14); color: #f87171; }
+
+.fleet-kpi-value {
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+.fleet-kpi-label { font-size: 12px; opacity: 0.65; margin-top: 2px; }
+.fleet-kpi-sub { font-size: 11px; opacity: 0.45; margin-top: 1px; }
+
+/* ==== Board & kartu HP ==== */
+.fleet-board {
+  display: grid;
+  /* R-03: minimum kolom 320px meluber di viewport 320px; diturunkan agar selalu muat. */
+  grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr));
+  gap: 14px;
+}
+
+.phone-card {
+  position: relative;
+  border: 1px solid var(--line, #2a2f3a);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.012));
+  padding: 14px 16px 12px;
+  overflow: hidden;
+}
+.phone-card::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--pc-accent, #6b7280);
+}
+.phone-card.up { --pc-accent: #22c55e; }
+.phone-card.down { --pc-accent: #ef4444; }
+.phone-card.unknown { --pc-accent: #6b7280; }
+
+.pc-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.pc-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--pc-accent, #6b7280);
+  position: relative;
+  flex-shrink: 0;
+}
+.phone-card.up .pc-dot::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 2px solid rgba(34, 197, 94, 0.5);
+  animation: pc-pulse 2s ease-out infinite;
+}
+@keyframes pc-pulse {
+  0% { transform: scale(0.6); opacity: 1; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+.pc-name { font-weight: 700; font-size: 15px; }
+.pc-sub { font-size: 11px; opacity: 0.55; margin-left: auto; text-align: right; }
+
+.pc-metrics {
+  display: grid;
+  /* R-03: minmax(0,1fr) + break-all pada nilai panjang agar endpoint proxy tidak memaksa kartu melebar. */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 14px;
+  margin: 8px 0 10px;
+}
+.pc-metric .v { overflow-wrap: anywhere; }
+.pc-metric { font-size: 12px; }
+.pc-metric .k { opacity: 0.5; display: block; font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; }
+.pc-metric .v { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.pc-metric .v code { font-size: 13px; }
+.pc-metric.wide { grid-column: 1 / -1; }
+
+.pc-charts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  padding: 10px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.18);
+}
+.pc-chart .t {
+  font-size: 10px;
+  opacity: 0.5;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+  display: flex;
+  justify-content: space-between;
+}
+
+.pc-gauge {
+  grid-column: 1 / -1;
+  margin-top: 2px;
+}
+.pc-gauge .bar {
+  height: 6px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+  margin-top: 4px;
+}
+.pc-gauge .fill {
+  height: 100%;
+  border-radius: 4px;
+  background: #22c55e;
+  transition: width 0.4s ease;
+}
+.pc-gauge.warn .fill { background: #f59e0b; }
+.pc-gauge.full .fill { background: #ef4444; }
+
+.pc-accounts { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 10px; }
+.pc-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
+
+/* ==== Placeholder perangkat terdaftar ==== */
+.phone-card.placeholder { border-style: dashed; opacity: 0.85; }
+.phone-card.placeholder .pc-dot { background: repeating-linear-gradient(45deg, #6b7280 0 3px, transparent 3px 6px); }
+
+/* ==== Empty state ==== */
+.fleet-empty {
+  text-align: center;
+  padding: 34px 20px 30px;
+  border: 1px dashed var(--line, #2a2f3a);
+  border-radius: 14px;
+  margin-bottom: 14px;
+}
+.fleet-empty svg { width: 54px; height: 54px; opacity: 0.6; margin-bottom: 8px; }
+.fleet-empty h3 { margin: 0 0 6px; }
+.fleet-empty p { margin: 0 auto 18px; max-width: 520px; opacity: 0.6; font-size: 13px; }
+.fleet-steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 10px;
+  max-width: 720px;
+  margin: 0 auto;
+  text-align: left;
+}
+.fleet-step {
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--line, #2a2f3a);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+.fleet-step b { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.fleet-step .n {
+  width: 20px; height: 20px; border-radius: 50%;
+  background: #6366f1; color: #fff;
+  display: inline-grid; place-items: center;
+  font-size: 11px; font-weight: 700; flex-shrink: 0;
+}
+
+/* ==== Riwayat (detail) ==== */
+.fleet-detail {
+  grid-column: 1 / -1;
+  margin-top: 2px;
+  padding: 14px;
+  border: 1px solid var(--line, #2a2f3a);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.22);
+}
+.fleet-detail h4 { margin: 0 0 10px; }
+.fleet-detail .tbl { font-size: 12.5px; }
+.fleet-open td { background: rgba(255, 255, 255, 0.02); }

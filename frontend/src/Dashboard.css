@@ -27,9 +27,7 @@
 .dash-live { font-size: 12px; font-weight: 700; letter-spacing: .1em; color: #2dd4a7; display: flex; gap: 8px; align-items: center; }
 .dot-live { width: 9px; height: 9px; border-radius: 50%; background: #00a87e; }
 .dash-error { background: rgba(226,59,74,.12); border: 1px solid #e23b4a; border-radius: 12px; padding: 12px 16px; margin-bottom: 16px; }
-.loading { display: flex; align-items: center; gap: 10px; color: #8d969e; font-size: 13px; padding: 18px; }
-.loading::before { content: ''; width: 16px; height: 16px; border: 2px solid rgba(255,255,255,.25); border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
+/* .loading pindah ke ui.css (R-27, global). */
 .stat-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 18px; }
 .stat { background: linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.015)); border: 1px solid rgba(255,255,255,.09); border-radius: 20px; padding: 18px; }
 .stat .num { font-size: 30px; font-weight: 600; }

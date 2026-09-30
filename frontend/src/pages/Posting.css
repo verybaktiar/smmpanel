@@ -1,0 +1,26 @@
+/* R-31: hero tint FB + komposer lapang + file picker tombol agar halaman posting terasa seperti editor, bukan form mentah. */
+.composer-box { min-height: 130px; resize: vertical; }
+.count { display: block; text-align: right; font-size: 11.5px; color: #9aa0aa; margin-top: 4px; }
+.ai-row { display: flex; gap: 8px; }
+.ai-row .inp { flex: 1; min-width: 0; }
+.file-row { display: flex; gap: 10px; align-items: center; }
+.file-name { font-size: 12.5px; color: #9aa0aa; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.composer-send { width: 100%; margin-top: 4px; }
+.psteps-head { display: flex; justify-content: space-between; font-size: 12.5px; color: #9aa0aa; margin-bottom: 8px; }
+.sched-acc { font-size: 13px; color: #9aa0aa; margin: -4px 0 12px; }
+.sched-acc strong { color: #fff; }
+.cut { max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sched-del { border: 1px solid rgba(226,59,74,.4); color: #ff7a86; border-radius: 9999px; padding: 6px 12px; font-size: 12px; cursor: pointer; background: transparent; }
+/* R-31: pratinjau ala postingan IG agar kolom kanan halaman IG berguna, bukan ruang kosong. */
+.ig-prev-card { align-self: start; }
+.ig-post { border: 1px solid rgba(255,255,255,.09); border-radius: 14px; overflow: hidden; background: rgba(0,0,0,.25); }
+.ig-head { display: flex; align-items: center; gap: 10px; padding: 12px 14px; font-size: 13.5px; }
+.ig-avatar { width: 30px; height: 30px; border-radius: 50%; background: linear-gradient(135deg,#F58529,#DD2A7B); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; color: #fff; }
+.ig-media { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; }
+.ig-empty { display: flex; align-items: center; justify-content: center; color: #9aa0aa; font-size: 13px; background: rgba(255,255,255,.03); }
+.ig-body { padding: 12px 14px; }
+.ig-cap { font-size: 13.5px; line-height: 1.55; margin: 0 0 6px; word-break: break-word; }
+@media (max-width: 720px) {
+  .ai-row { flex-direction: column; }
+  .ai-row .btn-ghost { width: 100%; }
+}

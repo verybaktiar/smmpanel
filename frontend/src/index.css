@@ -1,0 +1,21 @@
+/* Dasar gelap — samakan bahasa visual panel lama */
+:root { color-scheme: dark; }
+* { box-sizing: border-box; }
+:focus-visible { outline: 2px solid #6b71ff; outline-offset: 2px; }
+/* Orb ambience kanan: mengisi void layar lebar dengan warna brand, di bawah konten. */
+body::after { content: ''; position: fixed; top: 20%; right: -180px; width: 480px; height: 640px;
+  background: radial-gradient(closest-side, rgba(73,79,223,.16), rgba(221,42,123,.07), transparent 70%);
+  pointer-events: none; z-index: 0; }
+.app { position: relative; z-index: 1; }
+body {
+  margin: 0;
+  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  background:
+    radial-gradient(1100px 480px at 85% -10%, rgba(73,79,223,.20), transparent 60%),
+    radial-gradient(800px 400px at 8% 0%, rgba(230,30,73,.12), transparent 60%),
+    radial-gradient(700px 500px at 0% 100%, rgba(37,244,238,.07), transparent 60%),
+    radial-gradient(900px 500px at 100% 100%, rgba(24,119,242,.10), transparent 60%),
+    #101014;
+  color: #fff;
+  min-height: 100vh;
+}

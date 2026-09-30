@@ -72,7 +72,7 @@ export default function FbDashboard() {
         <div className="hero-num"><span>{counts.active}</span><small>aktif</small></div>
       </header>
 
-      <section className="stat-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14, marginBottom: 18 }}>
+      <section className="fb-stat-row">
         <div className="card stat" style={{ margin: 0 }}><div className="num" style={{ fontSize: 30, fontWeight: 600 }}>{accounts === null ? '…' : counts.all}</div><div className="muted" style={{ fontSize: 12 }}>Akun Facebook</div></div>
         <div className="card stat stat-hero" style={{ margin: 0 }}><div className="num ok" style={{ fontSize: 30, fontWeight: 600 }}>{accounts === null ? '…' : counts.active}</div><div className="muted" style={{ fontSize: 12 }}>Akun Aktif</div></div>
         <div className="card stat" style={{ margin: 0 }}><div className="num" style={{ fontSize: 30, fontWeight: 600 }}>{warming.length}</div><div className="muted" style={{ fontSize: 12 }}>Warming</div></div>
@@ -92,6 +92,7 @@ export default function FbDashboard() {
         ) : rows.length === 0 ? (
           <p className="muted">{tab === 'active' ? 'Tidak ada akun aktif. Login dulu dari halaman Akun.' : 'Tidak ada akun ditemukan.'}</p>
         ) : (
+          <div className="table-wrap" style={{ overflowX: 'auto' }}>
           <table className="tbl">
             <thead><tr><th>Akun</th><th>Status</th><th>Login Terakhir</th><th>Aksi</th></tr></thead>
             <tbody>
@@ -116,6 +117,7 @@ export default function FbDashboard() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </div>
     </div>

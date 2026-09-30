@@ -1,0 +1,16 @@
+/* R-31: status order jadi pill berwarna agar kondisi terbaca sekilas; URL jadi tautan agar bisa dicek tanpa salin manual. */
+.like-url { font-size: 11.5px; margin-top: 2px; }
+.like-url a { color: #8ab4ff; text-decoration: none; }
+.like-url a:hover { text-decoration: underline; }
+/* R-31: pill status pindah ke ui.css agar global. */
+/* R-31: panel ringkasan + cara pakai agar halaman order tidak kosong dan pemula paham alur. */
+.like-grid { display: grid; grid-template-columns: 1fr 280px; gap: 16px; align-items: start; }
+.like-grid .card { margin: 0; }
+.like-side h3 { margin: 0 0 12px; font-size: 14px; }
+.like-stat { display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: #9aa0aa; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,.06); }
+.like-stat strong { color: #fff; font-size: 16px; }
+.like-stat .ok { color: #4ade80; }
+.like-how { margin: 0; padding-left: 18px; font-size: 13px; color: #9aa0aa; line-height: 1.8; }
+@media (max-width: 900px) {
+  .like-grid { grid-template-columns: 1fr; }
+}

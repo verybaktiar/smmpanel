@@ -1,0 +1,31 @@
+.app { display: flex; min-height: 100vh; }
+.sidebar { width: 240px; background: #191c1f; border-right: 1px solid rgba(255,255,255,.09); padding: 20px 14px; display: flex; flex-direction: column; gap: 6px; position: fixed; top: 0; left: 0; bottom: 0; overflow-y: auto; z-index: 10; }
+.brand { display: flex; align-items: center; gap: 10px; padding: 4px 10px 16px; font-size: 17px; font-weight: 700; }
+.brand .logo { width: 32px; height: 32px; background: linear-gradient(135deg, #494fdf, #e61e49); border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #fff; }
+.brand .ver { font-size: 10px; font-weight: 600; background: rgba(73,79,223,.25); color: #a5aaff; border-radius: 9999px; padding: 2px 8px; margin-left: 2px; }
+.sec-label { font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: .08em; color: #9aa0aa; padding: 16px 10px 6px; }
+.sec-label .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 8px; vertical-align: 1px; }
+/* R-31: grup lipat agar 22 menu tidak menuntut scroll; pilihan tersimpan lokal. */
+.sec-toggle { display: flex; align-items: center; justify-content: space-between; width: 100%; background: none; border: none; cursor: pointer; padding: 16px 10px 6px; min-height: 44px; }
+.sec-toggle .sec-label { padding: 0; }
+.chev { color: #8d969e; font-size: 18px; line-height: 1; transform: rotate(-90deg); transition: transform .2s; }
+.chev.open { transform: rotate(0deg); }
+.nav-item { display: flex; align-items: center; gap: 11px; padding: 8px 14px; min-height: 44px; border-radius: 12px; font-size: 13px; font-weight: 500; color: #c9c9cd; text-decoration: none; transition: .15s; }
+.nav-item:hover { background: rgba(244,244,244,.06); color: #fff; }
+.nav-item.active { background: rgba(73,79,223,.22); color: #fff; }
+.nav-item .ic { width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.sidebar .foot { margin-top: auto; font-size: 12px; color: #55628a; padding: 12px 10px; }
+.main { flex: 1; min-width: 0; margin-left: 240px; padding: 24px 32px; max-width: 1440px; }
+.page-title { font-size: 32px; font-weight: 600; letter-spacing: -.48px; margin: 0 0 4px; }
+.page-sub { color: #8d969e; font-size: 14px; margin: 0 0 22px; }
+.topbar { display: none; }
+.nav-overlay { display: none; }
+@media (max-width: 900px) {
+  .sidebar { width: 270px; transform: translateX(-105%); transition: transform .25s ease; }
+  .sidebar.open { transform: none; box-shadow: 0 0 60px rgba(0,0,0,.6); }
+  .nav-overlay.show { display: block; position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 9; }
+  .main { margin-left: 0; padding: 14px 14px 60px; }
+  .topbar { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+  .menu-btn { background: rgba(244,244,244,.07); border: 1px solid rgba(255,255,255,.09); color: #fff; border-radius: 12px; width: 44px; height: 44px; font-size: 18px; cursor: pointer; padding: 0; }
+  .topbar-title { font-weight: 700; font-size: 15px; }
+}

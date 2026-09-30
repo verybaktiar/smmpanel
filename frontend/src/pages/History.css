@@ -1,0 +1,2 @@
+/* R-31: toolbar filter + potong pesan agar tabel riwayat tetap ramping walau log panjang. */
+.cut { max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

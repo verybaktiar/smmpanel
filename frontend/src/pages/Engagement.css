@@ -1,0 +1,28 @@
+/* Gaya khusus halaman Engagement */
+.eng-chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.eng-chip { background: rgba(244,244,244,.06); border: 1px solid rgba(255,255,255,.09); color: #c9c9cd; border-radius: 9999px; padding: 7px 16px; font-size: 12.5px; font-weight: 600; cursor: pointer; }
+.eng-chip.on { background: rgba(73,79,223,.25); border-color: #494fdf; color: #fff; }
+.eng-chip .muted { font-weight: 500; }
+.eng-tabs { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+.eng-tabs button { background: rgba(244,244,244,.06); border: 1px solid rgba(255,255,255,.09); color: #c9c9cd; border-radius: 9999px; padding: 8px 20px; font-size: 13px; font-weight: 600; cursor: pointer; min-height: 44px; }
+.eng-tabs button.on { background: rgba(73,79,223,.22); border-color: #494fdf; color: #fff; }
+
+.gate-box { border: 1px solid rgba(255,255,255,.09); border-radius: 14px; padding: 14px 16px; margin-bottom: 14px; }
+.gate-box.ok { border-color: rgba(74,222,128,.4); background: rgba(74,222,128,.06); }
+.gate-box.bad { border-color: rgba(226,59,74,.4); background: rgba(226,59,74,.06); }
+.gate-box.bad.warn { border-color: rgba(251,191,36,.4); background: rgba(251,191,36,.05); }
+.gate-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.gate-title { font-size: 13px; font-weight: 600; }
+.gate-reason { font-size: 12.5px; color: #8d969e; }
+.gate-detail { font-size: 11.5px; color: #6d7680; margin-top: 4px; }
+
+.eng-grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 14px; align-items: start; }
+@media (max-width: 900px) { .eng-grid { grid-template-columns: 1fr; } }
+
+.eng-log { max-height: 340px; overflow-y: auto; font-family: ui-monospace, monospace; font-size: 12px; line-height: 1.8; background: rgba(0,0,0,.25); border: 1px solid rgba(255,255,255,.07); border-radius: 12px; padding: 12px 14px; }
+.eng-log .l-ok { color: #4ade80; }
+.eng-log .l-bad { color: #ff7a86; }
+.eng-log .l-info { color: #9aa0aa; }
+
+.story-file { display: flex; gap: 10px; align-items: center; }
+.story-file .file-name { font-size: 12.5px; color: #8d969e; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -1,0 +1,4 @@
+/* R-31: pesan status global + ringkasan terakhir di hero agar kondisi backup terbaca sekilas. */
+.farm-msg { font-size: 13px; margin: 0 0 12px; padding: 10px 14px; border-radius: 12px; }
+.farm-msg.ok { color: #4ade80; background: rgba(74,222,128,.08); border: 1px solid rgba(74,222,128,.3); }
+.farm-msg.bad { color: #ff7a86; background: rgba(226,59,74,.08); border: 1px solid rgba(226,59,74,.35); }
