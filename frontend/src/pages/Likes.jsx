@@ -141,7 +141,7 @@ export default function Likes({ platform }) {
       </div>
       {show && (
         <div className="overlay" onClick={() => setShow(false)}>
-          <form className="modal" onClick={(e) => e.stopPropagation()} onSubmit={add}>
+          <form className="modal" role="dialog" aria-modal="true" aria-label="Tambah order like" onClick={(e) => e.stopPropagation()} onSubmit={add}>
             <h3>Tambah {isIg ? 'Like IG' : 'Order Like'}</h3>
             {isIg && (
               <label className="f">Akun IG

@@ -1,0 +1,20 @@
+/* TikTok Hub: hero tint brand + langkah bernomor, konsisten dengan halaman AutoCreate.
+   Alasan visual: pengenalan status risiko TikTok dan alur kerja tanpa baca ulang teks (R-20/R-31). */
+.acc-tiktok { background: linear-gradient(120deg, rgba(37,244,238,.10), transparent 60%), rgba(255,255,255,.02); }
+
+.tt-note { margin-bottom: 16px; font-size: 13px; border-left: 3px solid #fbbf24; }
+.tt-note strong { display: block; margin-bottom: 2px; }
+
+.tt-steps { display: flex; flex-direction: column; gap: 12px; }
+.tt-step { display: flex; gap: 14px; align-items: flex-start; margin: 0; }
+.tt-num { flex-shrink: 0; width: 30px; height: 30px; border-radius: 50%; background: rgba(37,244,238,.12); border: 1px solid rgba(37,244,238,.5); color: #25F4EE; font-weight: 700; font-size: 13px; display: flex; align-items: center; justify-content: center; }
+.tt-body { flex: 1; min-width: 0; }
+.tt-body strong { font-size: 14px; }
+.tt-body .muted { font-size: 13px; margin: 4px 0 0; }
+.tt-body a { color: #8ab4ff; text-decoration: none; }
+.tt-body a:hover { text-decoration: underline; }
+
+.tt-tools { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; font-size: 13px; color: #9aa0aa; }
+.tt-tools li { line-height: 1.6; }
+.tt-tools a { color: #8ab4ff; text-decoration: none; }
+.tt-tools a:hover { text-decoration: underline; }
