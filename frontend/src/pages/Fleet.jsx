@@ -41,18 +41,23 @@ export default function Fleet() {
   const [pool, setPool] = useState([]); // HP terdaftar di proxies-pool.txt (belum tentu ada data)
   const [mon, setMon] = useState(null);
   const [loading, setLoading] = useState(true); // R-27: kosong saat fetch ≠ kosong sebenarnya
+  const [failed, setFailed] = useState(false); // R-27: gagal fetch = error state interaktif, bukan kosong
+  const [attempt, setAttempt] = useState(0);
   const [busy, setBusy] = useState(false);
   const [expanded, setExpanded] = useState(null);
   const [limit, setLimit] = useState(50);
 
   const load = async () => {
+    setLoading(true); setFailed(false);
+    let ok = 0;
+    // api() tidak melempar untuk HTTP error (balik {error}), jadi kegagalan dihitung dari r.error juga.
     const [s, t, h, a, p, m] = await Promise.all([
-      api('/api/proxies/pool/stats').catch(() => []),
-      api('/api/proxies/pool/trend').catch(() => []),
-      api('/api/proxies/pool/history?limit=200').catch(() => []),
-      api('/api/accounts').catch(() => []),
-      api('/api/proxies/pool/preview').catch(() => null),
-      api('/api/proxies/pool/monitor').catch(() => null),
+      api('/api/proxies/pool/stats').then((r) => { if (r && !r.error) ok++; return r; }).catch(() => []),
+      api('/api/proxies/pool/trend').then((r) => { if (r && !r.error) ok++; return r; }).catch(() => []),
+      api('/api/proxies/pool/history?limit=200').then((r) => { if (r && !r.error) ok++; return r; }).catch(() => []),
+      api('/api/accounts').then((r) => { if (r && !r.error) ok++; return r; }).catch(() => []),
+      api('/api/proxies/pool/preview').then((r) => { if (r && !r.error) ok++; return r; }).catch(() => null),
+      api('/api/proxies/pool/monitor').then((r) => { if (r && !r.error) ok++; return r; }).catch(() => null),
     ]);
     setStats(Array.isArray(s) ? s : []);
     setTrend(Array.isArray(t) ? t : []);
@@ -60,9 +65,12 @@ export default function Fleet() {
     setAccounts(Array.isArray(a) ? (a.accounts || a) : []);
     setPool(p && Array.isArray(p.pool) ? p.pool : []);
     setMon(m);
+    // Gagal total (0 dari 6) = masalah koneksi/server, bukan fleet kosong.
+    setFailed(ok === 0);
     setLoading(false);
   };
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [attempt]);
+  const retry = () => setAttempt((n) => n + 1);
 
   const runMonitor = async () => {
     setBusy(true);
@@ -128,7 +136,7 @@ export default function Fleet() {
         <div>
           <h1 className="page-title">Fleet HP</h1>
           <p className="page-sub" style={{ margin: 0 }}>
-            Monitoring perangkat proxy HP Android — status live, tren 7 hari, ikatan akun per SIM
+            Monitoring perangkat proxy HP Android: status live, tren 7 hari, ikatan akun per SIM
           </p>
         </div>
         <div className="px-btns">
@@ -175,16 +183,21 @@ export default function Fleet() {
       {/* R-27: loading ditampilkan dulu; empty state hanya setelah data benar-benar kosong. */}
       {loading ? (
         <div className="card"><div className="loading">Memuat status fleet...</div></div>
+      ) : failed ? (
+        <div className="card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+          <p className="muted" style={{ margin: 0 }}>Gagal memuat status fleet. Cek koneksi ke server, lalu coba lagi.</p>
+          <button className="btn-ghost" onClick={retry}>Coba lagi</button>
+        </div>
       ) : totalPhones === 0 ? (
         <div className="fleet-empty">
           <IcFleet />
           <h3>Belum ada perangkat di fleet</h3>
-          <p>Hubungkan HP Android pertamamu sebagai proxy — Tailscale untuk jaringan privat, Every Proxy untuk membagikan koneksi SIM.</p>
+          <p>Hubungkan HP Android pertamamu sebagai proxy: Tailscale untuk jaringan privat, Every Proxy untuk membagikan koneksi SIM.</p>
           <div className="fleet-steps">
             <div className="fleet-step"><b><span className="n">1</span> HP: Tailscale</b>Login akun yang sama dengan PC, nyalakan Connect, catat IP 100.x.y.z.</div>
             <div className="fleet-step"><b><span className="n">2</span> HP: Every Proxy</b>Aktifkan HTTP port 8888, matikan WiFi (pakai data SIM), baterai unrestricted.</div>
             <div className="fleet-step"><b><span className="n">3</span> Daftarkan</b>Tambahkan baris <code>100.x.y.z:8888 | HP1</code> di <code>proxies-pool.txt</code>, lalu Sinkron di halaman Proxy.</div>
-            <div className="fleet-step"><b><span className="n">4</span> Pantau</b>Cek cepat di sini — status, latensi, dan grafik 7 hari muncul otomatis.</div>
+            <div className="fleet-step"><b><span className="n">4</span> Pantau</b>Cek cepat di sini: status, latensi, dan grafik 7 hari muncul otomatis.</div>
           </div>
         </div>
       ) : (
@@ -247,7 +260,7 @@ export default function Fleet() {
                 </div>
                 {open && (
                   <div className="fleet-detail">
-                    <h4>Riwayat cek — {s.label}</h4>
+                    <h4>Riwayat cek: {s.label}</h4>
                     <table className="tbl">
                       <thead><tr><th>Waktu</th><th>Status</th><th>IP keluar</th><th>Latensi</th><th>IP berubah</th><th>Error</th></tr></thead>
                       <tbody>
@@ -284,7 +297,7 @@ export default function Fleet() {
                 <div className="pc-metric wide"><span className="k">Endpoint</span><span className="v"><code className="px-val">{p.proxy}</code></span></div>
               </div>
               <p className="muted" style={{ fontSize: 12, margin: '4px 0 10px' }}>
-                Perangkat ini terdaftar di pool tapi belum pernah dicek. Jalankan "Cek cepat semua HP" —
+                Perangkat ini terdaftar di pool tapi belum pernah dicek. Jalankan "Cek cepat semua HP", lalu
                 kalau gagal terus, pastikan Tailscale &amp; Every Proxy aktif di HP dan WiFi HP dimatikan.
               </p>
             </div>

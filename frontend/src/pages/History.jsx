@@ -35,23 +35,27 @@ export default function History() {
   const [res, setRes] = useState('all');
   const [source, setSource] = useState(params.get('tab') === 'engagement' ? 'engagement' : 'posting');
   const [engAction, setEngAction] = useState('all');
+  const [failed, setFailed] = useState(false); // R-27: gagal fetch = error interaktif, bukan "tidak ada riwayat"
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     (async () => {
-      const l = await api('/api/logs');
-      if (Array.isArray(l)) setLogs(l);
+      const l = await api('/api/logs').catch(() => null);
+      if (Array.isArray(l)) { setLogs(l); setFailed(false); }
+      else { setLogs([]); setFailed(true); }
     })();
-  }, []);
+  }, [attempt]);
 
   useEffect(() => {
     if (source !== 'engagement' || engLogs) return;
     (async () => {
       const q = accId !== 'all' ? `&accountId=${accId}` : '';
-      const l = await api(`/api/engagement/log?limit=300${q}`);
-      if (Array.isArray(l)) setEngLogs(l);
-      else setEngLogs([]);
+      const l = await api(`/api/engagement/log?limit=300${q}`).catch(() => null);
+      if (Array.isArray(l)) { setEngLogs(l); setFailed(false); }
+      else { setEngLogs([]); setFailed(true); }
     })();
-  }, [source, engLogs]);
+  }, [source, engLogs, attempt]);
+  const retry = () => { setFailed(false); setLogs(null); setEngLogs(null); setAttempt((n) => n + 1); };
 
   // Refetch saat filter akun berubah (server-side filter, hemat untuk data besar).
   useEffect(() => {
@@ -133,7 +137,12 @@ export default function History() {
       </div>
 
       <div className="card table-wrap">
-        {rows.length === 0 ? <p className="muted">{source === 'engagement' && engLogs === null ? 'Memuat riwayat...' : 'Tidak ada riwayat cocok.'}</p> : (
+        {failed ? (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+            <p className="muted" style={{ margin: 0 }}>Gagal memuat riwayat. Cek koneksi ke server, lalu coba lagi.</p>
+            <button className="btn-ghost" onClick={retry}>Coba lagi</button>
+          </div>
+        ) : rows.length === 0 ? <p className="muted">{source === 'engagement' && engLogs === null ? 'Memuat riwayat...' : 'Tidak ada riwayat cocok.'}</p> : (
           <table className="tbl">
             <thead><tr><th>Waktu</th><th>Akun</th><th>Jenis</th><th>Status</th><th>Hasil</th></tr></thead>
             <tbody>

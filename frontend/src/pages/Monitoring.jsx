@@ -23,19 +23,27 @@ export default function Monitoring() {
   const [eng, setEng] = useState(null); // statistik engagement harian
   const [engDays, setEngDays] = useState(14); // rentang grafik: 7 | 14 | 30 | 90
   const [updated, setUpdated] = useState(null);
+  const [failed, setFailed] = useState(false); // R-27: gagal total fetch = error interaktif, bukan layar kosong
+  const [attempt, setAttempt] = useState(0);
 
   const load = async () => {
+    let ok = 0;
+    // api() tidak melempar untuk HTTP error (balik {error}), jadi kegagalan dihitung dari r.error juga.
     const [s, a, f, l] = await Promise.all([
-      api('/api/stats').catch(() => null),
-      api('/api/accounts').catch(() => []),
-      api('/api/farm/devices').catch(() => null),
-      api('/api/logs').catch(() => []),
+      api('/api/stats').then((r) => { if (r && !r.error) ok++; return r; }).catch(() => null),
+      api('/api/accounts').then((r) => { if (r && !r.error) ok++; return r; }).catch(() => []),
+      api('/api/farm/devices').then((r) => { if (r && !r.error) ok++; return r; }).catch(() => null),
+      api('/api/logs').then((r) => { if (r && !r.error) ok++; return r; }).catch(() => []),
     ]);
     if (s && !s.error) setStats(s);
     if (Array.isArray(a)) setAccounts(a);
     if (Array.isArray(f)) setFarm(f);
     if (Array.isArray(l)) setLogs(l);
     setUpdated(new Date());
+    // Halaman ini auto-refresh 15 dtk, jadi gagal sesaat tidak perlu alarm;
+    // tapi gagal total saat data masih kosong = error state dengan Coba lagi.
+    setFailed((prev) => (prev || ok === 0));
+    if (ok > 0) setFailed(false);
   };
 
   // Grafik engagement: fetch terpisah karena rentangnya berganti lewat toggle.
@@ -48,7 +56,8 @@ export default function Monitoring() {
     loadEng(engDays);
     const t = setInterval(load, 15000);
     return () => clearInterval(t);
-  }, []);
+  }, [attempt]);
+  const retry = () => { setFailed(false); setAttempt((n) => n + 1); };
 
   // Ganti rentang grafik: fetch ulang (polling 15 dtk TIDAK menimpa rentang pilihan user).
   useEffect(() => {
@@ -80,6 +89,13 @@ export default function Monitoring() {
           </p>
         </div>
       </div>
+
+      {failed && (
+        <div className="card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 14 }}>
+          <p className="muted" style={{ margin: 0 }}>Gagal mengambil data kesehatan. Auto-refresh tetap jalan, atau coba sekarang.</p>
+          <button className="btn-ghost" onClick={retry}>Coba lagi</button>
+        </div>
+      )}
 
       <div className="mon-grid">
         {svc.map((s) => (

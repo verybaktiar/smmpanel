@@ -22,6 +22,8 @@ export default function Likes({ platform }) {
   const [jobs, setJobs] = useState([]);
   const [accounts, setAccounts] = useState([]);
   const [loading, setLoading] = useState(true); // R-27: kosong saat fetch ≠ kosong sebenarnya
+  const [failed, setFailed] = useState(false); // R-27: gagal total fetch = error interaktif
+  const [attempt, setAttempt] = useState(0);
   const [show, setShow] = useState(false);
   const [form, setForm] = useState({ accountId: '', name: '', postUrl: '', targetLikes: 10 });
   const [busy, setBusy] = useState(null);
@@ -31,13 +33,21 @@ export default function Likes({ platform }) {
   const running = useMemo(() => jobs.filter((j) => ['running', 'active', 'pending'].includes(j.status)).length, [jobs]);
 
   const load = async () => {
-    const [j, a] = await Promise.all([api(base).catch(() => []), api('/api/accounts')]);
+    setLoading(true); setFailed(false);
+    let ok = 0;
+    // api() tidak melempar untuk HTTP error (balik {error}), jadi kegagalan dihitung dari r.error juga.
+    const [j, a] = await Promise.all([
+      api(base).then((r) => { if (r && !r.error) ok++; return r; }).catch(() => []),
+      api('/api/accounts').then((r) => { if (r && !r.error) ok++; return r; }).catch(() => []),
+    ]);
     const arr = Array.isArray(j) ? j : j?.orders || j?.data || [];
     if (Array.isArray(arr)) setJobs(arr);
     if (Array.isArray(a)) setAccounts(a.filter((x) => x.platform === platform));
+    setFailed(ok === 0);
     setLoading(false);
   };
-  useEffect(() => { load(); }, [platform]);
+  useEffect(() => { load(); }, [platform, attempt]);
+  const retry = () => setAttempt((n) => n + 1);
   useEffect(() => {
     if (!show) return;
     const esc = (e) => { if (e.key === 'Escape') setShow(false); };
@@ -79,6 +89,11 @@ export default function Likes({ platform }) {
       <div className="card table-wrap">
         {loading ? (
           <div className="loading">Memuat order...</div>
+        ) : failed ? (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+            <p className="muted" style={{ margin: 0 }}>Gagal memuat order. Cek koneksi ke server, lalu coba lagi.</p>
+            <button className="btn-ghost" onClick={retry}>Coba lagi</button>
+          </div>
         ) : jobs.length === 0 ? <p className="muted">Belum ada order. Tekan Tambah untuk mulai.</p> : (
           <table className="tbl">
             <thead><tr><th>Nama</th><th>Target</th><th>Status</th><th>Aksi</th></tr></thead>

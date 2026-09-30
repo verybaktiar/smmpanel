@@ -1,19 +1,30 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api.js';
 import '../ui.css';
 
+// R-27: error state interaktif. Gagal fetch tidak berhenti di teks mati:
+// tampil pesan + tombol "Coba lagi" yang mengulang muatan.
 export default function Notifications() {
   const [channels, setChannels] = useState(null);
   const [config, setConfig] = useState(null);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
+    let alive = true;
     (async () => {
       const [c, g] = await Promise.all([
         api('/api/notification/channels').catch((e) => ({ error: e.message })),
         api('/api/notification/config').catch((e) => ({ error: e.message })),
       ]);
+      if (!alive) return;
       setChannels(c); setConfig(g);
     })();
+    return () => { alive = false; };
+  }, [attempt]);
+
+  const retry = useCallback(() => {
+    setChannels(null); setConfig(null);
+    setAttempt((n) => n + 1);
   }, []);
 
   const chArr = Array.isArray(channels) ? channels
@@ -23,6 +34,8 @@ export default function Notifications() {
     ? Object.entries(config).filter(([, v]) => typeof v !== 'object')
     : [];
   const chErr = channels && channels.error;
+  const cfgErr = config && config.error;
+  const errStyle = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' };
 
   return (
     <div>
@@ -32,7 +45,10 @@ export default function Notifications() {
         <div className="card">
           <h3>Kanal</h3>
           {chErr ? (
-            <p className="muted">Tak terbaca: {chErr}</p>
+            <div style={errStyle}>
+              <p className="muted" style={{ margin: 0 }}>Tak terbaca: {chErr}</p>
+              <button className="btn-ghost" onClick={retry}>Coba lagi</button>
+            </div>
           ) : channels === null ? (
             <div className="loading">Memuat kanal...</div>
           ) : chArr.length === 0 ? (
@@ -68,8 +84,13 @@ export default function Notifications() {
               </tbody>
             </table>
             </div>
+          ) : cfgErr ? (
+            <div style={errStyle}>
+              <p className="muted" style={{ margin: 0 }}>Tak terbaca: {cfgErr}</p>
+              <button className="btn-ghost" onClick={retry}>Coba lagi</button>
+            </div>
           ) : (
-            <p className="muted">{config && config.error ? 'Tak terbaca: ' + config.error : 'Belum ada konfigurasi terbaca.'}</p>
+            <p className="muted">Belum ada konfigurasi terbaca.</p>
           )}
         </div>
       </div>

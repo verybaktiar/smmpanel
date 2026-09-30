@@ -106,7 +106,7 @@ export default function Proxy() {
   };
 
   const syncPool = async () => {
-    if (!pool.length) { setMsg({ ok: false, text: 'Pool kosong — isi proxies-pool.txt dulu (host:port:user:pass | Label).' }); return; }
+    if (!pool.length) { setMsg({ ok: false, text: 'Pool kosong, isi proxies-pool.txt dulu (host:port:user:pass | Label).' }); return; }
     setPoolBusy(true);
     const r = await api('/api/proxies/pool/sync', { method: 'POST' }).catch((e) => ({ error: String(e) }));
     setPoolBusy(false);
@@ -133,7 +133,7 @@ export default function Proxy() {
     const r = await api('/api/proxies/pool/health', { method: 'POST' }).catch(() => ({ error: 'gagal memulai health-check' }));
     setPoolBusy(false);
     if (r.error) setMsg({ ok: false, text: r.error });
-    else { setMsg({ ok: true, text: `Health-check ${r.total} HP dimulai — hasil muncul di bawah.` }); loadHealth(); }
+    else { setMsg({ ok: true, text: `Health-check ${r.total} HP dimulai, hasil muncul di bawah.` }); loadHealth(); }
   };
 
   const SgBadge = ({ ip }) => {
@@ -143,7 +143,7 @@ export default function Proxy() {
     return (
       <span className={`pill ${failed ? 'p-bad' : 'p-ok'}`}
         style={{ marginLeft: 6 }}
-        title={`Signup ${s.platform?.toUpperCase() || ''} ${s.createdAt ? '(' + s.createdAt + ')' : ''}: ${s.username || '-'} — status ${s.status}`}>
+        title={`Signup ${s.platform?.toUpperCase() || ''} ${s.createdAt ? '(' + s.createdAt + ')' : ''}: ${s.username || '-'} status ${s.status}`}>
         {failed ? 'IP burn ⛔' : `dipakai: ${s.username || 'akun'} ✅`}
       </span>
     );
@@ -162,7 +162,7 @@ export default function Proxy() {
 
       <form className="card" onSubmit={save}>
         <h3>{edit ? `Edit #${edit.id}` : 'Tambah Proxy'}</h3>
-        <label className="f">Proxy (bisa banyak, pisah baris, format host:port:user:pass)
+        <label className="f">Proxy (bisa banyak, pisahkan dengan baris baru, format host:port:user:pass)
           <textarea className="inp" required value={values} onChange={(e) => setValues(e.target.value)}
             placeholder={'31.59.20.176:6754:user:pass'} />
         </label>
@@ -179,8 +179,8 @@ export default function Proxy() {
         <p className="muted" style={{ fontSize: 12, margin: '4px 0 10px' }}>
           {pool.length > 0
             ? <>{pool.length} HP terdaftar di file pool: {pool.map((p) => p.label).join(', ')}.</>
-            : <>Belum ada HP di pool. Isi <code>proxies-pool.txt</code> — satu baris per HP:
-              <code> 100.x.y.z:8888:user:pass | Label</code> (IP Tailscale HP, WiFi HP mati, data seluler aktif).</>}
+            : <>Belum ada HP di pool. Isi <code>proxies-pool.txt</code>, satu baris per HP:
+              <code> 100.x.y.z:8888:user:pass | Label</code>. IP Tailscale HP, WiFi HP dimatikan, data seluler aktif.</>}
         </p>
         <div className="px-btns">
           <button className="btn-primary" disabled={poolBusy || (health && health.running)} onClick={syncPool}>Sinkron ke daftar proxy</button>
@@ -216,9 +216,10 @@ export default function Proxy() {
       <div className="card table-wrap">
         <h3>Monitoring Fleet HP</h3>
         <p className="muted" style={{ fontSize: 12, margin: '4px 0 10px' }}>
-          Cek cepat = ping ringan tanpa buka situs (aman untuk kuota SIM). Uptime &amp; rata-rata dihitung dari riwayat 7 hari.
-          <b> Ganti IP</b> = operator memutar IP (CGNAT) — normal, tapi akun tetap terikat SIM yang sama.
-          Set <code>PHONE_MONITOR_INTERVAL_MIN=15</code> di .env untuk cek otomatis berkala.
+          Cek cepat = tes koneksi ringan tanpa membuka situs apa pun, aman untuk kuota SIM.
+          Uptime dan rata-rata dihitung dari riwayat 7 hari.
+          <b> Ganti IP</b> = operator seluler memutar IP secara otomatis. Itu normal; akun tetap terikat SIM yang sama.
+          Untuk cek otomatis berkala, isi <code>PHONE_MONITOR_INTERVAL_MIN=15</code> di file .env.
         </p>
         <div className="px-btns">
           <button className="btn-primary" disabled={monBusy || (health && health.running)} onClick={runMonitor}>
@@ -257,7 +258,7 @@ export default function Proxy() {
             </tbody>
           </table>
         ) : (
-          <p className="muted">Belum ada riwayat. Jalankan "Cek cepat" atau aktifkan auto-monitor — statistik muncul setelah ada data.</p>
+          <p className="muted">Belum ada riwayat. Jalankan "Cek cepat" atau aktifkan auto-monitor, statistik muncul setelah ada data.</p>
         )}
       </div>
 
@@ -265,11 +266,12 @@ export default function Proxy() {
         <div className="card table-wrap">
           <h3>Skor kelayakan IP (riwayat tes signup IG)</h3>
           <p className="muted" style={{ fontSize: 12, margin: '4px 0 10px' }}>
-            Skor = % tes layak (tes di halaman IG Auto-Create → "Tes IP dulu"). 100 = semua layak.
-            Badge <b>IP burn</b> = IP pernah dipakai signup &amp; gagal — jangan dipakai lagi.
+            Skor = persen tes signup IG yang layak (jalankan tesnya di halaman IG Auto-Create, kartu "Tes IP dulu").
+            Skor 100 berarti semua tes layak.
+            Badge <b>IP burn</b> berarti IP pernah dipakai buat signup lalu gagal. Jangan dipakai lagi.
           </p>
           <table className="tbl">
-            <thead><tr><th>IP keluar</th><th>Skor</th><th>Tes</th><th>L / R / D</th><th>Terakhir</th></tr></thead>
+            <thead><tr><th>IP keluar</th><th>Skor</th><th>Tes</th><th>Layak / Ragu / Dicurigai</th><th>Terakhir</th></tr></thead>
             <tbody>
               {scores.map((s) => (
                 <tr key={s.ip}>
@@ -298,7 +300,7 @@ export default function Proxy() {
 
       <div className="card table-wrap">
         <h3>Daftar ({list.length})</h3>
-        {list.length === 0 ? <p className="muted">Belum ada proxy. Nanti saat beli proxy, tempel di form atas.</p> : (
+        {list.length === 0 ? <p className="muted">Belum ada proxy. Nanti saat beli proxy, tempel di form paling atas.</p> : (
           <table className="tbl">
             <thead><tr><th>ID</th><th>Proxy</th><th>Status</th><th>Tes</th><th>Aksi</th></tr></thead>
             <tbody>
