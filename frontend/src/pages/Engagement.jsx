@@ -6,9 +6,10 @@ import '../ui.css';
 import './Engagement.css';
 
 // Tiga mode: komentar (FB/IG), DM (IG/FB Messenger), story (IG/FB).
+// DM = pesan langsung ke satu akun.
 const TABS = [
   { id: 'comment', label: 'Komentar', icon: 'chat' },
-  { id: 'dm', label: 'Direct Message', icon: 'bell' },
+  { id: 'dm', label: 'Pesan Langsung', icon: 'bell' },
   { id: 'story', label: 'Story', icon: 'camera' },
 ];
 
@@ -23,14 +24,14 @@ function GateBox({ gate }) {
       <div className="gate-head">
         <span className="gate-title">Gerbang Akun</span>
         <span className={`pill ${ok ? 'p-done' : warn ? 'p-wait' : 'p-bad'}`}>
-          {ok ? 'Boleh jalan' : warn ? 'Tak terbaca' : 'Ditolak'}
+          {ok ? 'Boleh jalan' : warn ? 'Status tak terbaca' : 'Ditolak'}
         </span>
       </div>
       <div className="gate-reason">{gateLabel(gate.reasons || [])}</div>
       {gate.detail && (
         <div className="gate-detail">
-          {gate.detail.cooldown ? `cooldown: ${gate.detail.cooldown} · ` : ''}
-          {gate.detail.warming && gate.detail.warming.reason ? `warming: ${gate.detail.warming.reason}` : ''}
+          {gate.detail.cooldown ? `Jeda wajib: ${gate.detail.cooldown} · ` : ''}
+          {gate.detail.warming && gate.detail.warming.reason ? `Warming: ${gate.detail.warming.reason}` : ''}
         </div>
       )}
     </div>
@@ -71,7 +72,7 @@ export default function Engagement() {
     })();
   }, []);
 
-  // Cek gate setiap akun/aksi berubah — tampilkan ALASAN sebelum user mencoba.
+  // Cek gate setiap akun/aksi berubah; tampilkan ALASAN sebelum user mencoba.
   useEffect(() => {
     setGate(null);
     if (!accId) return;
@@ -96,7 +97,7 @@ export default function Engagement() {
 
   const runComment = async () => {
     // ==== MODE BATCH: banyak URL, variasi AI per postingan ====
-    // Akun dicek per-akun di server (gate per akun) — dropdown tak wajib bila chips terisi.
+    // Akun dicek per-akun di server (gate per akun); dropdown tak wajib bila chips terisi.
     if (batchMode) {
       const urls = batchUrls.split('\n').map((s) => s.trim()).filter(Boolean);
       if (!urls.length) { addLog('bad', 'Tempel minimal 1 URL postingan.'); return; }
@@ -105,7 +106,7 @@ export default function Engagement() {
       if (!accIds.length && !accId) { addLog('bad', 'Pilih minimal 1 akun (chips multi-akun atau dropdown).'); return; }
       const viaName = accIds.length ? batchAccs.map((a) => a.name).join(' + ') : sel?.name;
       setBusy(true);
-      addLog('info', `Batch ${urls.length} postingan via ${viaName} — variasi per postingan${accIds.length > 1 ? ', rotasi antar akun' : ''} (jeda alami antar komentar)...`);
+      addLog('info', `Batch ${urls.length} postingan via ${viaName}, variasi per postingan${accIds.length > 1 ? ', rotasi antar akun' : ''} (jeda alami antar komentar)...`);
       const r = await api('/api/comment/batch', {
         method: 'POST',
         body: JSON.stringify({
@@ -129,8 +130,8 @@ export default function Engagement() {
       (r.results || []).forEach((x, i) => {
         addLog(x.ok ? 'ok' : 'bad',
           x.ok
-            ? `[${i + 1}/${r.total}] ✓ (${x.account}) "${String(x.comment || '').slice(0, 42)}" → ${x.url.slice(0, 42)}`
-            : `[${i + 1}/${r.total}] ✗ (${x.account || '?'}): ${x.reason || 'gagal'} → ${x.url.slice(0, 42)}`);
+            ? `[${i + 1}/${r.total}] ✓ (${x.account}) "${String(x.comment || '').slice(0, 42)}" ke ${x.url.slice(0, 42)}`
+            : `[${i + 1}/${r.total}] ✗ (${x.account || '?'}): ${x.reason || 'gagal'}, URL ${x.url.slice(0, 42)}`);
       });
       addLog('info', `Batch selesai: ${r.succeeded}/${r.total} berhasil.`);
       return;
@@ -215,7 +216,7 @@ export default function Engagement() {
         <div>
           <h1 className="page-title">Engagement</h1>
           <p className="page-sub" style={{ margin: 0 }}>
-            Komentar, DM, dan story via akun terpilih — lewat gerbang kebijakan yang sama dengan order
+            Komentar, pesan langsung, dan story via akun terpilih. Semua lewat gerbang kebijakan yang sama dengan order
           </p>
         </div>
         <button className="btn-ghost" onClick={goHistory} title={accId ? `Riwayat akun ${sel?.name || ''}` : 'Riwayat semua akun'}>
@@ -238,11 +239,11 @@ export default function Engagement() {
               <h3>Kirim Komentar</h3>
               <label className="warm-arm" style={{ marginBottom: 10 }}>
                 <input type="checkbox" checked={batchMode} onChange={(e) => setBatchMode(e.target.checked)} />
-                <span>Mode batch <span className="muted">(banyak postingan, variasi AI per postingan)</span></span>
+                <span>Mode batch <span className="muted">(banyak postingan sekaligus, variasi komentar AI per postingan)</span></span>
               </label>
               {batchMode ? (
                 <>
-                  <div className="f">Akun pengerjak (pilih 1+, komentar dibagi bergiliran)
+                  <div className="f">Akun pengerjak (pilih 1 atau lebih; komentar dibagi bergiliran)
                     <div className="eng-chips">
                       {accounts.map((a) => {
                         const on = batchAccs.some((x) => x.id === a.id);
@@ -255,7 +256,7 @@ export default function Engagement() {
                       })}
                     </div>
                     <span className="muted" style={{ fontSize: 11.5, marginTop: 4 }}>
-                      {batchAccs.length ? `${batchAccs.length} akun dipilih — akun yang ditolak gerbang otomatis dilewati` : 'Kosong = pakai akun di dropdown kanan'}
+                      {batchAccs.length ? `${batchAccs.length} akun dipilih. Akun yang ditolak gerbang otomatis dilewati.` : 'Kosong = pakai akun di panel kanan'}
                     </span>
                   </div>
                   {batchAccs.length > 1 && (
@@ -268,8 +269,8 @@ export default function Engagement() {
                       />
                       <span className="muted" style={{ fontSize: 11.5 }}>
                         {rotation === 'roundrobin'
-                          ? 'Komentar lompat antar akun — aktivitas tiap akun terlihat jarang.'
-                          : 'Satu akun selesaikan porsinya dulu, lalu akun berikutnya.'}
+                          ? 'Komentar pindah-pindah antar akun. Aktivitas tiap akun terlihat lebih jarang.'
+                          : 'Satu akun selesaikan porsinya dulu, baru lanjut ke akun berikutnya.'}
                       </span>
                     </div>
                   )}
@@ -283,25 +284,30 @@ export default function Engagement() {
                   <input className="inp" value={comment.postUrl} onChange={(e) => setComment({ ...comment, postUrl: e.target.value })} placeholder="https://..." />
                 </label>
               )}
-              <label className="f">{batchMode ? 'Teks khusus untuk SEMUA komentar (kosong = variasi AI per postingan)' : 'Teks komentar (kosong = otomatis via AI / template)'}
+              <label className="f">{batchMode ? 'Teks khusus untuk SEMUA komentar (kosong = variasi AI per postingan)' : 'Teks komentar (kosong = otomatis dari AI atau template)'}
                 <textarea className="inp" value={comment.text} onChange={(e) => setComment({ ...comment, text: e.target.value })} placeholder={batchMode ? 'Kosongkan agar AI membuat variasi berbeda tiap postingan' : 'Mis. Keren banget ini!'} />
               </label>
               <button className="btn-primary" disabled={!canRun && !batchMode} onClick={runComment}>
                 {busy ? (batchMode ? 'Batch berjalan... (bisa beberapa menit)' : 'Mengirim...') : batchMode ? `Kirim Batch${batchAccs.length ? ` (${batchAccs.length} akun)` : ''}` : 'Kirim Komentar'}
               </button>
+              <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>
+                Mode batch tidak menunggu gerbang per akun di panel. Akun yang ditolak otomatis dilewati.
+              </p>
             </div>
           )}
 
           {tab === 'dm' && (
             <div className="card">
-              <h3>Kirim Direct Message</h3>
+              <h3>Kirim Pesan Langsung</h3>
               <label className="f">Username tujuan
                 <input className="inp" value={dm.username} onChange={(e) => setDm({ ...dm, username: e.target.value })} placeholder="mis. jaguarku16" />
               </label>
               <label className="f">Pesan
                 <textarea className="inp" value={dm.message} onChange={(e) => setDm({ ...dm, message: e.target.value })} placeholder="Isi pesan..." />
               </label>
-              <p className="muted" style={{ fontSize: 12 }}>DM paling sensitif terhadap spam-filter — 1 akun maksimal beberapa DM/hari.</p>
+              <p className="muted" style={{ fontSize: 12 }}>
+                DM paling mudah ketahuan filter spam. Batasi 1 akun maksimal beberapa DM per hari.
+              </p>
               <button className="btn-primary" disabled={!canRun} onClick={runDM}>{busy ? 'Mengirim...' : 'Kirim DM'}</button>
             </div>
           )}
@@ -336,7 +342,7 @@ export default function Engagement() {
             <select className="inp" value={accId} onChange={(e) => setAccId(e.target.value)}>
               <option value="">Pilih akun aktif...</option>
               {accounts.map((a) => (
-                <option key={a.id} value={a.id}>{a.name} ({a.platform === 'ig' ? 'IG' : 'FB'})</option>
+                <option key={a.id} value={a.id}>{a.name} ({a.platform === 'ig' ? 'Instagram' : 'Facebook'})</option>
               ))}
             </select>
             {sel && (
@@ -348,6 +354,9 @@ export default function Engagement() {
 
           <div className="card">
             <h3>Log Aktivitas</h3>
+            <p className="muted" style={{ fontSize: 12, margin: '0 0 8px' }}>
+              Log ini hanya tampil di halaman ini. Riwayat permanen ada di menu Riwayat.
+            </p>
             {log.length === 0 ? (
               <p className="muted">Belum ada aksi di sesi ini.</p>
             ) : (

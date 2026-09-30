@@ -49,7 +49,7 @@ export default function Backup() {
     if (!s2) return;
     const r = await api('/api/backup/restore', { method: 'POST', body: JSON.stringify({ backupName: name }) });
     if (r.error) { setMsg({ ok: false, text: 'Gagal: ' + r.error }); toastErr('Restore gagal: ' + r.error); }
-    else { setMsg({ ok: true, text: 'Restore selesai. RESTART server & worker agar data baru termuat.' }); toastOk('Restore selesai — jangan lupa restart server & worker.'); }
+    else { setMsg({ ok: true, text: 'Restore selesai. RESTART server & worker agar data baru termuat.' }); toastOk('Restore selesai, jangan lupa restart server & worker.'); }
   };
 
   const last = list && list.length ? (list[0].created || list[0].created_at || list[0].date) : null;

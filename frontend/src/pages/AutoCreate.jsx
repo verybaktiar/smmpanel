@@ -53,15 +53,15 @@ export default function AutoCreate({ platform }) {
   const probeOn = isIg || isTt; // probe tersedia utk IG & TikTok
   const PNAME = { ig: 'IG Auto-Create', fb: 'FB Auto-Create', tiktok: 'TikTok Auto-Create' };
   const PSUB = {
-    ig: 'Bot siapkan email + OTP, kamu selesaikan sisanya',
-    fb: 'Bot isi form, kamu selesaikan captcha',
-    tiktok: 'Bot isi form + OTP email; slider captcha (bila muncul) kamu geser manual',
+    ig: 'Bot siapkan email dan isi kode OTP sendiri. Kamu selesaikan sisanya.',
+    fb: 'Bot isi form daftar. Kamu kerjakan captcha saat diminta.',
+    tiktok: 'Bot isi form dan OTP email. Kalau muncul slider captcha, kamu geser manual.',
   };
   const [proxies, setProxies] = useState([]);
   const [proxySel, setProxySel] = useState('');
   const [proxyOnce, setProxyOnce] = useState(''); // tempel sekali pakai, tak disimpan
   const [job, setJob] = useState({ status: 'idle', log: [] });
-  const [result, setResult] = useState(null); // hasil akun: username/email/password/...
+  const [result, setResult] = useState(null); // hasil akun: username, email, password, dst.
   const [reg, setReg] = useState(null); // { id, already } hasil daftar ke panel
   const [elapsed, setElapsed] = useState('');
   const [rl, setRl] = useState({ status: 'idle', log: [] }); // relogin job
@@ -139,10 +139,10 @@ export default function AutoCreate({ platform }) {
   const start = async () => {
     if (job.finishedAt) {
       const ageH = (Date.now() - new Date(job.finishedAt).getTime()) / 36e5;
-      if (ageH < 24 && !(await confirmDlg({ title: 'Batas 1 akun/hari', message: `Terakhir jalan ${Math.round(ageH)} jam lalu. Batas aman 1 akun/hari — tetap lanjutkan?`, okLabel: 'Ya, lanjutkan', danger: true, icon: '⏱' }))) return;
+      if (ageH < 24 && !(await confirmDlg({ title: 'Batas 1 akun per hari', message: `Akun terakhir dibuat ${Math.round(ageH)} jam lalu. Batas aman 1 akun baru per hari. Tetap lanjutkan?`, okLabel: 'Ya, lanjutkan', danger: true, icon: '⏱' }))) return;
     }
     const r = await api(`/api/create/${platform}/run`, { method: 'POST', body: JSON.stringify({ proxy: (proxyOnce.trim() || proxySel) }) });
-    if (r.error === 'already_running') return toastErr('Sudah ada yang berjalan, tunggu selesai dulu');
+    if (r.error === 'already_running') return toastErr('Masih ada proses yang berjalan. Tunggu sampai selesai dulu.');
     if (r.error) return toastErr('Gagal: ' + r.error);
     if (r.job) setJob(r.job);
   };
@@ -160,7 +160,7 @@ export default function AutoCreate({ platform }) {
   };
   const runRelogin = async () => {
     const name = (rlName.trim() || (result && result.username) || '').trim();
-    if (!name) return toastErr('Isi username akun dulu (atau buat akun lewat Auto-Create)');
+    if (!name) return toastErr('Isi username akun dulu, atau buat akun baru lewat Auto-Create.');
     const r = await api('/api/create/ig/relogin', { method: 'POST', body: JSON.stringify({ name }) });
     if (r.error === 'already_running') return toastInfo('Re-login sudah berjalan, tunggu selesai');
     if (r.error) return toastErr('Gagal: ' + r.error);
@@ -170,23 +170,23 @@ export default function AutoCreate({ platform }) {
     const px = (proxyOnce.trim() || proxySel);
     const r = await api(`/api/create/${platform}/probe`, { method: 'POST', body: JSON.stringify({ proxy: px }) });
     if (r.error === 'already_running') return toastInfo('Tes IP sudah berjalan, tunggu selesai');
-    if (r.error === 'probe_not_available') return toastInfo('Probe belum tersedia untuk platform ini');
+    if (r.error === 'probe_not_available') return toastInfo('Tes IP belum tersedia untuk platform ini.');
     if (r.error) return toastErr('Gagal: ' + r.error);
     if (r.job) setProbe(r.job);
   };
 
   const steps = isIg ? [
-    { t: 'Jalan otomatis', d: 'Bot siapkan email + isi OTP sendiri. Browser terbuka di PC ini.', cmd: null },
-    { t: 'Selesaikan manual', d: 'Captcha, nama, username, dan foto profil di browser yang terbuka.', cmd: null },
-    { t: 'Daftarkan ke panel', d: 'Sekarang otomatis: klik "Daftarkan ke Panel" di kartu hasil — tanpa terminal.', cmd: null },
+    { t: 'Jalan otomatis', d: 'Bot siapkan email dan isi OTP sendiri. Browser terbuka di PC ini.', cmd: null },
+    { t: 'Selesaikan manual', d: 'Kerjakan captcha, nama, username, dan foto profil di browser yang terbuka.', cmd: null },
+    { t: 'Daftarkan ke panel', d: 'Sekarang otomatis. Klik "Daftarkan ke Panel" di kartu hasil. Tanpa terminal.', cmd: null },
   ] : isTt ? [
-    { t: 'Jalan otomatis', d: 'Bot siapkan email manusiawi + isi OTP sendiri. Browser mobile (Pixel 7, ID) terbuka di PC ini.', cmd: null },
-    { t: 'Selesaikan slider captcha', d: 'Kalau muncul "drag the slider", geser manual di browser (bot tunggu max 10 menit).', cmd: null },
-    { t: 'Daftarkan ke panel', d: 'Klik "Daftarkan ke Panel" di kartu hasil — tanpa terminal.', cmd: null },
+    { t: 'Jalan otomatis', d: 'Bot siapkan email yang terlihat wajar dan isi OTP sendiri. Browser tiruan HP (Pixel 7, wilayah Indonesia) terbuka di PC ini.', cmd: null },
+    { t: 'Selesaikan slider captcha', d: 'Kalau muncul "drag the slider", geser manual di browser. Bot menunggu sampai 10 menit.', cmd: null },
+    { t: 'Daftarkan ke panel', d: 'Klik "Daftarkan ke Panel" di kartu hasil. Tanpa terminal.', cmd: null },
   ] : [
-    { t: 'Jalan otomatis', d: 'Bot isi form + email. Berhenti saat captcha, browser tetap terbuka.', cmd: null },
+    { t: 'Jalan otomatis', d: 'Bot isi form dan email. Proses berhenti saat captcha, browser tetap terbuka.', cmd: null },
     { t: 'Selesaikan captcha', d: 'Kerjakan captcha manual di browser yang terbuka sampai lolos.', cmd: null },
-    { t: 'Daftarkan ke panel', d: 'Sekarang otomatis: klik "Daftarkan ke Panel" di kartu hasil — tanpa terminal.', cmd: null },
+    { t: 'Daftarkan ke panel', d: 'Sekarang otomatis. Klik "Daftarkan ke Panel" di kartu hasil. Tanpa terminal.', cmd: null },
   ];
   const pill = PILL[job.status] || PILL.idle;
   const rlPill = PILL[rl.status] || PILL.idle;
@@ -207,15 +207,15 @@ export default function AutoCreate({ platform }) {
 
       {isIg ? (
         <div className="card ac-note ac-ok">
-          <strong>Terbukti bisa.</strong> sinta.surya57 (#67, sukses via IP Dedicated Indonesia) — wizard mobile + OTP otomatis + email manusiawi.
+          <strong>Terbukti bisa.</strong> Akun sinta.surya57 (#67) sukses dibuat lewat IP Dedicated Indonesia: mode wizard HP, OTP otomatis, email yang terlihat wajar.
         </div>
       ) : isTt ? (
         <div className="card ac-note ac-warn">
-          <strong>Belum teruji dengan IP baru.</strong> Percobaan lama pakai proxy datacenter (ditolak). Sekarang pakai ISP Dedicated Indonesia — probe dulu IP-nya sebelum create penuh.
+          <strong>Belum teruji dengan IP baru.</strong> Percobaan lama pakai proxy datacenter dan selalu ditolak TikTok. Sekarang pakai IP Dedicated Indonesia. Tes IP-nya dulu sebelum create penuh.
         </div>
       ) : (
         <div className="card ac-note ac-warn">
-          <strong>Sedang diblokir Meta.</strong> 10 proxy datacenter + IP rumah semua ditolak. Butuh IP residential/HP sebelum coba lagi.
+          <strong>Sedang diblokir Meta.</strong> 10 proxy datacenter dan IP rumah semua ditolak. Butuh IP residential (IP rumah) atau IP HP sebelum coba lagi.
         </div>
       )}
 
@@ -228,10 +228,10 @@ export default function AutoCreate({ platform }) {
             <span className={`run-pill ${pill[0]}`}>{pill[1]}</span>
           </span>
         </div>
-        <p className="muted run-note">Browser terbuka di PC ini. Selesaikan bagian manual di sana, progres terbaca di bawah.</p>
+        <p className="muted run-note">Browser terbuka di PC ini. Selesaikan bagian manual di sana. Progresnya terbaca di bawah.</p>
         <div className="run-row">
           <select className="inp" value={proxySel} onChange={(e) => setProxySel(e.target.value)}>
-            <option value="">Direct (tanpa proxy)</option>
+            <option value="">Langsung, tanpa proxy</option>
             {proxies.map((p) => <option key={p.id} value={p.value}>#{p.id} {maskProxy(p.value)}</option>)}
           </select>
           {job.status === 'running'
@@ -239,7 +239,7 @@ export default function AutoCreate({ platform }) {
             : <button className="btn-primary" onClick={start}>Jalankan</button>}
         </div>
         <input className="inp run-once" value={proxyOnce} onChange={(e) => setProxyOnce(e.target.value)}
-          placeholder="Atau tempel proxy sekali pakai (host:port:user:pass) — tak disimpan" />
+          placeholder="Atau tempel proxy sekali pakai (host:port:user:pass). Tidak disimpan." />
         {(job.log && job.log.length > 0) && (
           <pre ref={logRef} className="run-log">{job.log.join('\n')}</pre>
         )}
@@ -262,7 +262,7 @@ export default function AutoCreate({ platform }) {
             <Cred label="Email" value={result.email || '-'} />
             <Cred label="Password" value={result.password || '-'} />
             {result.proxy && <Cred label="Proxy" value={result.proxy} />}
-            {result.birthIp && <div className="cred-birth">IP lahir: <code>{result.birthIp}</code> — login berikutnya wajib lewat IP yang sama</div>}
+            {result.birthIp && <div className="cred-birth">IP lahir: <code>{result.birthIp}</code>. Login berikutnya wajib lewat IP yang sama.</div>}
           </div>
           <div className="result-actions">
             <button className="btn-primary" onClick={register} disabled={!!reg}>
@@ -276,7 +276,7 @@ export default function AutoCreate({ platform }) {
       {probeOn && (
         <div className="card run-panel">
           <div className="run-head">
-            <h3>Tes IP dulu (sebelum buang email)</h3>
+            <h3>Tes IP dulu (sebelum email terbuang percuma)</h3>
             <span className="run-meta">
               {probe.result && probe.result.ip && <span className="run-ip">{probe.result.ip}</span>}
               <span className={`run-pill ${probePill[0]}`}>{probePill[1]}</span>
@@ -284,9 +284,9 @@ export default function AutoCreate({ platform }) {
           </div>
           <p className="muted run-note">
             {isTt
-              ? 'Bot isi form daftar TikTok & submit 1x (tanpa menyelesaikan akun) — lapor tantangan: kode email = layak, slider/blokir = dicurigai.'
-              : 'Bot isi form daftar sampai layar username TANPA submit — email & identitas aman.'}
-            Hasil: layak / dicurigai / ragu untuk IP yang dipilih di atas (atau proxy tempel).
+              ? 'Bot mengisi form daftar TikTok dan menekan kirim sekali, tanpa menyelesaikan akun. Lalu ia melapor: dapat kode email berarti IP layak. Ketemu slider atau blokir berarti dicurigai.'
+              : 'Bot mengisi form daftar sampai layar username, tanpa menekan kirim. Email dan identitas tetap aman.'}
+            {' '}Hasilnya: layak, dicurigai, atau ragu, untuk IP yang dipilih di atas atau proxy tempel.
           </p>
           {probe.result && probe.result.verdict && verdictMeta && (
             <div className={`probe-verdict ${verdictMeta[0]}`}>
@@ -315,11 +315,12 @@ export default function AutoCreate({ platform }) {
             <span className={`run-pill ${rlPill[0]}`}>{rlPill[1]}</span>
           </div>
           <p className="muted run-note">
-            Cek session akun IG lewat proxy IP lahirnya. Dipakai kalau akun terdaftar tapi posting gagal.
+            Cek login akun IG lewat proxy IP lahirnya. IP lahir = IP yang dipakai saat akun dibuat.
+            Dipakai kalau akun sudah terdaftar tapi posting gagal.
           </p>
           <div className="run-row">
             <input className="inp" value={rlName} onChange={(e) => setRlName(e.target.value)}
-              placeholder={`Username akun (default: ${(result && result.username) || 'hasil terakhir'})`} />
+              placeholder={`Username akun (kosong = pakai hasil terakhir: ${(result && result.username) || 'belum ada'})`} />
             {rl.status === 'running'
               ? <button className="btn-danger-ghost like-del" onClick={async () => { await api('/api/create/ig/relogin/stop', { method: 'POST' }); }}>Batal</button>
               : <button className="btn-primary" onClick={runRelogin}>Tes Login</button>}
@@ -327,7 +328,7 @@ export default function AutoCreate({ platform }) {
           {(rl.log && rl.log.length > 0) && (
             <pre ref={rlLogRef} className="run-log">{rl.log.join('\n')}</pre>
           )}
-          {rl.status === 'done' && <p className="run-done">Login terverifikasi ✓</p>}
+          {rl.status === 'done' && <p className="run-done">Login terverifikasi. Session masih hidup.</p>}
         </div>
       )}
 

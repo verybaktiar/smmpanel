@@ -51,6 +51,8 @@ function inject() {
 function build({ title, message, okLabel, cancelLabel, danger, icon }) {
   return new Promise((resolve) => {
     inject();
+    // R-32: simpan pemicu agar fokus kembali ke sana setelah dialog ditutup.
+    const prevFocus = document.activeElement;
     const ov = document.createElement('div');
     ov.className = 'dlg-ov';
     ov.innerHTML = `
@@ -84,6 +86,7 @@ function build({ title, message, okLabel, cancelLabel, danger, icon }) {
         removed = true;
         ov.remove();
         resolve(v);
+        if (prevFocus && prevFocus.isConnected) prevFocus.focus();
       };
       ov.addEventListener('transitionend', finish, { once: true });
       setTimeout(finish, 260);
