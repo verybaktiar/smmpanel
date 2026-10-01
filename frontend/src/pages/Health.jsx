@@ -15,6 +15,7 @@ export default function Health() {
   const [errText, setErrText] = useState('');
   const [attempt, setAttempt] = useState(0);
   const [search, setSearch] = useState('');
+  const [tab, setTab] = useState('Semua'); // filter baris: Semua | Siap | Tertahan | Tak terbaca
 
   const load = (n) => {
     setRows(null);
@@ -52,9 +53,11 @@ export default function Health() {
   const signal = (v) => (v === true ? 'ok' : v === false ? 'bad' : 'wait');
   const gateText = (g) => (g ? (g.ok === true ? 'Siap' : g.ok === false ? 'Tahan' : 'Tak terbaca') : 'Tak terbaca');
   const proxyText = (acc) => (acc.proxy ? acc.proxy.split(':')[0] : 'Tanpa proxy');
-  const ipText = (ip) => (ip ? ip.ip : 'Belum ada');
 
   const list = (rows || []).filter((r) => {
+    if (tab === 'Siap' && !(r.gate && r.gate.ok === true)) return false;
+    if (tab === 'Tertahan' && !(r.gate && r.gate.ok === false)) return false;
+    if (tab === 'Tak terbaca' && !(!r.gate || r.gate.ok == null)) return false;
     if (!search.trim()) return true;
     const q = search.toLowerCase();
     return (r.acc.name || '').toLowerCase().includes(q) || (r.acc.email || '').toLowerCase().includes(q);
@@ -66,6 +69,9 @@ export default function Health() {
     hold: (rows || []).filter((r) => r.gate && r.gate.ok === false).length,
     unkn: (rows || []).filter((r) => !r.gate || r.gate.ok == null).length,
   };
+
+  // Filter tab: satu status gerbang per tab, jadi tombol tab benar-benar menyaring
+  // (tombol yang tidak melakukan apa pun menyesatkan operator).
 
   return (
     <div>
@@ -93,7 +99,8 @@ export default function Health() {
           ['Tertahan', counts.hold],
           ['Tak terbaca', counts.unkn],
         ].map(([label, n]) => (
-          <button key={label} className={`btn-ghost ${label === 'Semua' ? 'on' : ''}`}>{label} ({n})</button>
+          <button key={label} className={`btn-ghost ${tab === label ? 'on' : ''}`} aria-pressed={tab === label}
+            onClick={() => setTab(label)}>{label} ({n})</button>
         ))}
       </div>
 

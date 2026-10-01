@@ -45,7 +45,7 @@ export default function AI() {
       <p className="page-sub">Ditenagai openagentic.id · muse-spark-1.3</p>
       <div className="ai-tabs">
         {TABS.map((t) => (
-          <button key={t.id} className={tab === t.id ? 'btn-primary' : 'btn-ghost'} onClick={() => { setTab(t.id); setOut(''); }}>{t.title}</button>
+          <button key={t.id} className={tab === t.id ? 'btn-primary' : 'btn-ghost'} aria-pressed={tab === t.id} onClick={() => { setTab(t.id); setOut(''); }}>{t.title}</button>
         ))}
       </div>
       <form className="card" onSubmit={go}>

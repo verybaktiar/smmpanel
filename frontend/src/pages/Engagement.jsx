@@ -226,7 +226,7 @@ export default function Engagement() {
 
       <div className="eng-tabs">
         {TABS.map((t) => (
-          <button key={t.id} className={tab === t.id ? 'on' : ''} onClick={() => setTab(t.id)}>{t.label}</button>
+          <button key={t.id} className={tab === t.id ? 'on' : ''} aria-pressed={tab === t.id} onClick={() => setTab(t.id)}>{t.label}</button>
         ))}
       </div>
 
@@ -248,7 +248,7 @@ export default function Engagement() {
                       {accounts.map((a) => {
                         const on = batchAccs.some((x) => x.id === a.id);
                         return (
-                          <button type="button" key={a.id} className={`eng-chip ${on ? 'on' : ''}`}
+                          <button type="button" key={a.id} className={`eng-chip ${on ? 'on' : ''}`} aria-pressed={on}
                             onClick={() => setBatchAccs((s) => on ? s.filter((x) => x.id !== a.id) : [...s, a])}>
                             {a.name} <span className="muted">{a.platform === 'ig' ? 'IG' : 'FB'}</span>
                           </button>
