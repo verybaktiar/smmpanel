@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { api, gatesAll, gateLabel } from '../api.js';
+import '../ui.css';
 import { confirmDlg, alertDlg } from '../dialog.js';
 import { toastOk, toastErr } from '../toast.js';
 import SegTabs from '../KSeg.jsx';
@@ -41,6 +42,9 @@ export default function Accounts() {
   const [probeIp, setProbeIp] = useState(null); // { acc } sedang probe manual
   // Kesehatan gerbang per akun: { [id]: { ok, reasons } } — diambil massal 1 request.
   const [gates, setGates] = useState(null);
+  // Putar IP cepat: dialog panduan -> kartu proses -> probe otomatis konfirmasi IP Indonesia.
+  const [rotating, setRotating] = useState(null); // { id, name, status, log, startedAt, elapsedMs }
+  const rotateTimer = useRef(null);
 
   const load = async () => {
     const a = await api('/api/accounts');
@@ -239,6 +243,65 @@ export default function Accounts() {
     } finally { setSavingProxy(false); }
   };
 
+  // Putar IP cepat: SOP ganti IP HP (tombol "Rotasi IP" di halaman Phone Farm atau
+  // Mode Pesawat di HP), lalu panel memeriksa sendiri sampai IP Indonesia terbaca.
+  const startRotate = (acc) => {
+    const startedAt = Date.now();
+    setRotating({ id: acc.id, name: acc.name, status: 'running', log: ['Menunggu 15 detik, lalu memeriksa IP. Putar IP HP lewat halaman Phone Farm bila belum.'], startedAt, elapsedMs: 0 });
+    const probe = async () => {
+      const r = await api(`/api/accounts/${acc.id}/probe-ip`, { method: 'POST' }).catch(() => null);
+      const cc = String((r && r.country_code) || '').toUpperCase();
+      const ok = !!(r && !r.error && (!cc || cc === 'ID'));
+      const line = ok ? `✓ IP baru ${r.ip}${cc ? ` (${cc})` : ''}, Indonesia`
+        : r && r.error ? `✗ ${r.error}`
+        : `✗ IP lama masih terpakai${cc ? ` (${cc})` : ''}. Tekan Putar ulang di kartu ini`;
+      setRotating((s) => (s && s.status === 'running' ? { ...s, status: ok ? 'done' : 'error', elapsedMs: Date.now() - startedAt, log: [...s.log, line] } : s));
+      const m = await api('/api/accounts/ip-latest').catch(() => null);
+      if (m && !m.error) setIpLatest(m);
+    };
+    // Beri waktu operator beraksi di HP sebelum pengecekan pertama; timer dilacak agar
+    // bisa dibatalkan bila kartu ditutup sebelum probe jalan.
+    rotateTimer.current = setTimeout(probe, 15000);
+  };
+  useEffect(() => {
+    if (!rotating || rotating.status !== 'running') return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [rotating]);
+  // Dialog panduan dipanggil langsung dari klik (bukan efek) agar tidak dobel di StrictMode.
+  const askRotate = async (accOrId) => {
+    const acc = typeof accOrId === 'object' ? accOrId : accounts.find((a) => a.id === accOrId);
+    if (!acc) return;
+    const ok = await confirmDlg({
+      title: 'Putar IP sekarang?',
+      message: 'Putar IP HP dulu: pakai tombol "Rotasi IP" di halaman Phone Farm, atau matikan lalu nyalakan Mode Pesawat di HP. Tunggu sekitar 15 detik. Panel memeriksa IP otomatis setelahnya. Rotasi tetap di dalam Indonesia.',
+      okLabel: 'Mulai pengecekan', cancelLabel: 'Nanti saja', icon: '⟳',
+    });
+    if (!ok) return;
+    setIpHist((s) => (s.acc && s.acc.id === acc.id ? { acc: null, rows: null } : s)); // Modal digantikan kartu proses.
+    startRotate(acc);
+  };
+  const closeRotating = () => {
+    if (rotateTimer.current) { clearTimeout(rotateTimer.current); rotateTimer.current = null; }
+    setRotating(null);
+  };
+  // Kartu status mengambang untuk aktivasi dan putar IP: satu markup, judul/langkah per proses.
+  const floatPanel = (st, title, sub, onClose, actions) => (
+    <div className={`act-float ${st.status === 'done' ? 'ok' : st.status === 'error' ? 'err' : ''}`} role="status">
+      <div className="act-float-head">
+        <span className="act-orb">{st.status === 'running' ? <span className="act-spinner" /> : st.status === 'done' ? '✓' : '✗'}</span>
+        <div>
+          <div className="act-title">{title}</div>
+          <div className="act-sub">{sub}</div>
+        </div>
+        <button className="act-close" title="Tutup" onClick={onClose}>×</button>
+      </div>
+      {st.status === 'running' && <div className="act-bar"><span /></div>}
+      {actions && <div className="act-actions">{actions}</div>}
+      <div className="act-log">{(st.log || []).slice(-2).join('\n')}</div>
+    </div>
+  );
+
   return (
     <div>
       <div className={`acc-hero ${platform !== 'all' ? 'acc-' + platform : ''}`}>
@@ -361,25 +424,24 @@ export default function Accounts() {
         <button className="btn-ghost" disabled={page + 1 >= pages} onClick={() => setPage((p) => p + 1)}>Berikutnya</button>
       </div>
 
-      {actStat && (
-        <div className={`act-float ${actStat.status === 'done' ? 'ok' : actStat.status === 'error' ? 'err' : ''}`} role="status">
-          <div className="act-float-head">
-            <span className="act-orb">{actStat.status === 'running' ? <span className="act-spinner" /> : actStat.status === 'done' ? '✓' : '✗'}</span>
-            <div>
-              <div className="act-title">
-                {actStat.status === 'running' ? 'Mengaktivasi' : actStat.status === 'done' ? 'Login berhasil' : 'Aktivasi gagal'}: {actStat.name}
-              </div>
-              <div className="act-sub">
-                {actStat.status === 'running' && `Browser dibuka di PC, selesaikan login di jendela itu · ${fmtDur(now - actStat.startedAt)}`}
-                {actStat.status === 'done' && `Sesi tersimpan di profil persisten · ${fmtDur(actStat.elapsedMs)}`}
-                {actStat.status === 'error' && `Gagal setelah ${fmtDur(actStat.elapsedMs)}: cek log server / coba lagi`}
-              </div>
-            </div>
-            <button className="act-close" title="Tutup" onClick={() => setActStat(null)}>×</button>
-          </div>
-          {actStat.status === 'running' && <div className="act-bar"><span /></div>}
-          <div className="act-log">{(actStat.log || []).slice(-2).join('\n')}</div>
-        </div>
+      {actStat && floatPanel(
+        actStat,
+        `${actStat.status === 'running' ? 'Mengaktivasi' : actStat.status === 'done' ? 'Login berhasil' : 'Aktivasi gagal'}: ${actStat.name}`,
+        actStat.status === 'running' ? `Browser dibuka di PC, selesaikan login di jendela itu · ${fmtDur(now - actStat.startedAt)}`
+          : actStat.status === 'done' ? `Sesi tersimpan di profil persisten · ${fmtDur(actStat.elapsedMs)}`
+          : `Gagal setelah ${fmtDur(actStat.elapsedMs)}: cek log server / coba lagi`,
+        () => setActStat(null),
+      )}
+      {rotating && floatPanel(
+        rotating,
+        `Putar IP ${rotating.name}`,
+        rotating.status === 'running' ? `Kartu menutup sendiri setelah pengecekan pertama · ${fmtDur(now - rotating.startedAt)}`
+          : rotating.status === 'done' ? `IP baru Indonesia · ${fmtDur(rotating.elapsedMs)}`
+          : `IP lama masih terpakai · ${fmtDur(rotating.elapsedMs)}`,
+        closeRotating,
+        rotating.status === 'error' && (
+          <button type="button" className="btn-ghost" onClick={() => askRotate(rotating.id)}>Putar ulang</button>
+        ),
       )}
 
       {showAdd && (
@@ -456,6 +518,7 @@ export default function Accounts() {
               <button type="button" className="btn-ghost" disabled={probeIp === ipHist.acc.id} onClick={() => probeNow(ipHist.acc)}>
                 {probeIp === ipHist.acc.id ? 'Memprobe…' : '⟳ Probe IP sekarang'}
               </button>
+              <button type="button" className="btn-ghost" onClick={() => askRotate(ipHist.acc)}>Putar IP</button>
               <button type="button" className="btn-primary" onClick={() => setIpHist({ acc: null, rows: null })}>Tutup</button>
             </div>
           </div>

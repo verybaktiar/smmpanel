@@ -2,6 +2,7 @@ import { HashRouter, Routes, Route } from 'react-router-dom';
 import Layout from './layout.jsx';
 import Dashboard from './Dashboard.jsx';
 import Accounts from './pages/Accounts.jsx';
+import Health from './pages/Health.jsx';
 import Posting from './pages/Posting.jsx';
 import Farm from './pages/Farm.jsx';
 import Proxy from './pages/Proxy.jsx';
@@ -26,6 +27,7 @@ export default function App() {
         <Route element={<Layout />}>
           <Route index element={<Dashboard />} />
           <Route path="akun" element={<Accounts />} />
+          <Route path="kesehatan" element={<Health />} />
           <Route path="posting" element={<Posting />} />
           <Route path="farm" element={<Farm />} />
           <Route path="proxy" element={<Proxy />} />

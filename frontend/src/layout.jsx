@@ -35,6 +35,7 @@ const GROUPS = [
     label: 'Operasi',
     items: [
       { to: '/akun', icon: 'users', label: 'Semua Akun' },
+      { to: '/kesehatan', icon: 'grid', label: 'Kesehatan Akun' },
       { to: '/history', icon: 'clock', label: 'Riwayat' },
       { to: '/monitoring', icon: 'chart', label: 'Monitoring' },
       { to: '/fleet', icon: 'phone', label: 'Fleet HP' },
@@ -75,6 +76,7 @@ export default function Layout() {
   };
   const menuBtnRef = useRef(null);
   const sideRef = useRef(null);
+  const id2 = useRef(null);
   const [groups, setGroups] = useState(() => {
     try { return JSON.parse(localStorage.getItem('smm-nav') || '{}'); }
     catch { return {}; }
@@ -97,9 +99,17 @@ export default function Layout() {
   useEffect(() => {
     if (!sideRef.current) return;
     if (open) {
-      const first = sideRef.current.querySelector('a, button');
-      if (first) first.focus();
-    } else if (sideRef.current.contains(document.activeElement)
+      // Fokus ke tautan pertama SETELAH paint (double rAF): class .open baru berlaku
+      // penuh di frame berikutnya, fokus yang dipasang di tengah commit bisa gugur.
+      const id1 = requestAnimationFrame(() => {
+        id2.current = requestAnimationFrame(() => {
+          const first = sideRef.current && sideRef.current.querySelector('a, button');
+          if (first) first.focus();
+        });
+      });
+      return () => { cancelAnimationFrame(id1); if (id2.current) cancelAnimationFrame(id2.current); };
+    }
+    if (sideRef.current.contains(document.activeElement)
       && menuBtnRef.current && getComputedStyle(menuBtnRef.current).display !== 'none') {
       menuBtnRef.current.focus();
     }

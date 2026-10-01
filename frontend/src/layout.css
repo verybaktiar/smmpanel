@@ -21,8 +21,13 @@
 .topbar { display: none; }
 .nav-overlay { display: none; }
 @media (max-width: 900px) {
-  .sidebar { width: 270px; transform: translateX(-105%); transition: transform .25s ease; }
-  .sidebar.open { transform: none; box-shadow: 0 0 60px rgba(0,0,0,.6); }
+  /* R-32: drawer tertutup harus keluar dari urutan Tab. Transform saja tidak cukup
+     (elemen di luar layar tetap bisa difokus). visibility TANPA jeda transisi: jeda
+     0.25s di sisi tertutup ikut dipakai browser saat MEMBUKA (before-change style),
+     sehingga auto-fokus React ke tautan pertama gagal selama 250ms pertama.
+     Slide-out instan dikorbankan demi fokus yang benar; slide-in tetap beranimasi. R-31. */
+  .sidebar { width: 270px; transform: translateX(-105%); visibility: hidden; transition: transform .25s ease; }
+  .sidebar.open { transform: none; visibility: visible; box-shadow: 0 0 60px rgba(0,0,0,.6); }
   .nav-overlay.show { display: block; position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 9; }
   .main { margin-left: 0; padding: 14px 14px 60px; }
   .topbar { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }

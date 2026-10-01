@@ -1,0 +1,23 @@
+/* Kesehatan Akun: gaya spesifik halaman. Hero, tabel, pill, dan badge memakai
+   kelas global (.acc-hero/.card/.tbl/.pill) dari Accounts.css/ui.css yang diimpor
+   di Health.jsx — di sini hanya pelengkap agar tak menyentuh halaman lain. R-31. */
+.health-err {
+  display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap;
+  border: 1px solid rgba(226,59,74,.4); background: rgba(226,59,74,.08); color: #ff7a86;
+  border-radius: 12px; padding: 12px 16px; margin-bottom: 14px; font-size: 13px;
+}
+.health-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+/* Tab ringkasan statis: gaya menyala sama dengan pill aktif di tempat lain. */
+.health-tabs .on { background: rgba(73,79,223,.22); border-color: #494fdf; color: #fff; }
+.toolbar { margin-bottom: 14px; }
+.toolbar .inp { max-width: 320px; }
+/* Alasan gerbang boleh panjang; kecilkan dan biarkan membungkus aman (R-03). */
+.health-reason { font-size: 12px; overflow-wrap: anywhere; max-width: 260px; }
+.health-ip, .health-ip-bad { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.health-cc { font-size: 11px; color: #8d969e; font-weight: 600; letter-spacing: .05em; }
+.health-ip-bad .ip-mono { color: #ff7a86; }
+.health-note { font-size: 12px; line-height: 1.6; margin-top: 4px; }
+.health-note a { color: #8fb4ff; }
+@media (max-width: 720px) {
+  .health-reason { max-width: none; }
+}
