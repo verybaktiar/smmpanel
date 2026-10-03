@@ -8,25 +8,37 @@ const https = require('https');
 
 const REPO = 'ShadowHackrs/gmail-account-creator';
 const BRANCH = 'main';
-const EXE = 'auto_gmail_creator.exe';
-const DEST = path.join(__dirname, '..', 'tools', 'gmail-creator', EXE);
+const FILES = [
+  'auto_gmail_creator.exe',
+  // Temuan 2026-10-03: tool upstream error "names txt is empty" bila daftar nama
+  // tidak ada; ikutkan juga file data-nya.
+  'data/names.txt',
+];
+const DEST_DIR = path.join(__dirname, '..', 'tools', 'gmail-creator');
 
-fs.mkdirSync(path.dirname(DEST), { recursive: true });
-const url = `https://raw.githubusercontent.com/${REPO}/${BRANCH}/${EXE}`;
-console.log('Mengunduh:', url);
+fs.mkdirSync(path.join(DEST_DIR, 'data'), { recursive: true });
 
-function get(u, depth) {
+function get(rel, depth) {
+  const dest = path.join(DEST_DIR, ...rel.split('/'));
+  if (fs.existsSync(dest) && fs.statSync(dest).size > 0) {
+    console.log(`Lewati (sudah ada): ${rel}`);
+    next();
+    return;
+  }
+  const url = `https://raw.githubusercontent.com/${REPO}/${BRANCH}/${rel}`;
+  console.log('Mengunduh:', url);
   if (depth > 3) { console.error('Gagal: terlalu banyak redirect'); process.exit(1); }
-  https.get(u, (res) => {
+  https.get(url, (res) => {
     if (res.statusCode === 301 || res.statusCode === 302) {
-      return get(res.headers.location, depth + 1);
+      res.resume();
+      return get(rel, depth + 1);
     }
     if (res.statusCode !== 200) {
       console.error('Gagal: HTTP', res.statusCode);
       process.exit(1);
     }
     const total = Number(res.headers['content-length'] || 0);
-    const out = fs.createWriteStream(DEST);
+    const out = fs.createWriteStream(dest);
     let got = 0;
     res.on('data', (c) => {
       got += c.length;
@@ -34,9 +46,17 @@ function get(u, depth) {
     });
     res.pipe(out);
     res.on('end', () => {
-      console.log(`\nSelesai: ${DEST} (${(got / 1048576).toFixed(1)} MB)`);
+      console.log(`\nSelesai: ${dest} (${(got / 1048576).toFixed(1)} MB)`);
+      next();
     });
     out.on('error', (e) => { console.error('Gagal menulis:', e.message); process.exit(1); });
   }).on('error', (e) => { console.error('Gagal:', e.message); process.exit(1); });
 }
-get(url, 0);
+
+let i = 0;
+function next() {
+  if (i >= FILES.length) return;
+  const rel = FILES[i++];
+  get(rel, 0);
+}
+next();
