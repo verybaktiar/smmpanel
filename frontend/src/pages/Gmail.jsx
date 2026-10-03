@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '../api.js';
 import { confirmDlg } from '../dialog.js';
 import { toastOk, toastErr } from '../toast.js';
@@ -20,6 +20,8 @@ export default function Gmail() {
   const [showImport, setShowImport] = useState(false);
   const [importText, setImportText] = useState('');
   const [importBusy, setImportBusy] = useState(false);
+  const [promptText, setPromptText] = useState('');
+  const [promptBusy, setPromptBusy] = useState(false);
 
   // R-32: Escape menutup modal impor, meski fokus sedang di textarea.
   useEffect(() => {
@@ -31,16 +33,6 @@ export default function Gmail() {
 
   // Log live: cukup refresh manual via aksi, tapi polling ringan saat job jalan
   // membuat log ikut maju tanpa operator menekan apa pun.
-  useEffect(() => {
-    if (!stats || !stats.job || stats.job.status !== 'running') return undefined;
-    const t = setInterval(() => {
-      api('/api/gmail/run/status').then((s) => {
-        if (s && !s.error) setStats((prev) => (prev ? { ...prev, job: s } : prev));
-      });
-    }, 2500);
-    return () => clearInterval(t);
-  }, [stats]);
-
   const load = (n) => {
     setRows(null);
     setFailed(false);
@@ -56,7 +48,14 @@ export default function Gmail() {
         return;
       }
       setRows(g);
-      setStats(s);
+      // Endpoint stats mengirim job tanpa log; pertahankan log terakhir agar
+      // hasil impor masih terbaca setelah reload stok (termasuk reload otomatis
+      // saat job selesai).
+      setStats((prev) => {
+        if (s.job && s.job.log) return s;
+        const prevLog = prev && prev.job && prev.job.log ? prev.job.log : null;
+        return prevLog ? { ...s, job: { ...s.job, log: prevLog } } : s;
+      });
     });
     setAttempt(n);
   };
@@ -64,6 +63,25 @@ export default function Gmail() {
   const [init] = useState(() => { load(0); return true; });
   void init;
   const retry = () => load(attempt + 1);
+
+  // Log live: polling ringan saat job jalan membuat log ikut maju tanpa
+  // operator menekan apa pun. Saat job berhenti (selesai/diinterupsi), stok
+  // dimuat ulang sekali agar hasil impor langsung terlihat di tabel.
+  const attemptRef = useRef(attempt);
+  useEffect(() => { attemptRef.current = attempt; }, [attempt]);
+  const prevRunningRef = useRef(false);
+  useEffect(() => {
+    const runningNow = !!(stats && stats.job && stats.job.status === 'running');
+    if (!runningNow && prevRunningRef.current) load(attemptRef.current + 1);
+    prevRunningRef.current = runningNow;
+    if (!runningNow) return undefined;
+    const t = setInterval(() => {
+      api('/api/gmail/run/status').then((s) => {
+        if (s && !s.error) setStats((prev) => (prev ? { ...prev, job: s } : prev));
+      });
+    }, 2500);
+    return () => clearInterval(t);
+  }, [stats]);
 
   const doImport = async (e) => {
     e.preventDefault();
@@ -81,8 +99,19 @@ export default function Gmail() {
   const startRun = async () => {
     const r = await api('/api/gmail/run', { method: 'POST', body: '{}' });
     if (!r || r.error) { toastErr(r.error === 'already_running' ? 'Proses masih berjalan' : r.error || 'Gagal memulai'); return; }
-    toastOk('Jendela Gmail Creator Pro terbuka: pilih menu di sana');
+    toastOk('Putaran dimulai: jawab menunya (1, 1, 1) di kotak Jawab');
     load(attempt + 1);
+  };
+
+  // Kirim jawaban ke prompt TUI tool (menu, jumlah akun, warmup). Teks kosong = cukup Enter.
+  const sendPrompt = async (e) => {
+    e.preventDefault();
+    if (promptBusy) return;
+    setPromptBusy(true);
+    const r = await api('/api/gmail/run/input', { method: 'POST', body: JSON.stringify({ text: promptText }) });
+    setPromptBusy(false);
+    if (!r || r.error) { toastErr(r.error === 'no_running_job' ? 'Tidak ada proses berjalan' : r.error || 'Gagal mengirim'); return; }
+    setPromptText('');
   };
 
   const stopRun = async () => {
@@ -140,7 +169,7 @@ export default function Gmail() {
             <h3 style={{ margin: 0 }}>Gmail Creator Pro</h3>
             <p className="modal-hint" style={{ margin: '4px 0 0' }}>
               {stats && stats.hasPython
-                ? 'Backend open-source (Python/Playwright): membuka jendela tool terpisah, pilih menunya di sana. Hasil diimpor otomatis setelah jendela ditutup.'
+                ? 'Backend open-source (Python/Playwright) berjalan tersembunyi; log live di bawah. Jawab tiap pertanyaan tool (menu, jumlah akun, warmup) lewat kotak Jawab — hasil diimpor otomatis ke stok.'
                 : 'Membuka jendela tool terpisah: pilih menunya di sana (butuh Chrome di mesin ini). Hasil diimpor otomatis ke stok setelah jendelanya ditutup.'}
               {!stats || stats.hasPython || stats.hasBinary ? null : ' Tool belum disiapkan: lihat tools/gmail-creator/README.md'}
             </p>
@@ -155,6 +184,19 @@ export default function Gmail() {
         </div>
         {job && job.status !== 'idle' && (
           <pre className="gmail-log" aria-live="polite" aria-label="Log Gmail Creator Pro">{job.log && job.log.length ? job.log.join('\n') : 'Menunggu output...'}</pre>
+        )}
+        {running && (
+          <form className="gmail-prompt" onSubmit={sendPrompt}>
+            <input
+              className="inp"
+              aria-label="Jawaban prompt tool"
+              placeholder="Jawab prompt tool, mis. 1 (kosong = cukup Enter)"
+              value={promptText}
+              onChange={(e) => setPromptText(e.target.value)}
+              disabled={promptBusy}
+            />
+            <button type="submit" className="btn-ghost" disabled={promptBusy}>Kirim</button>
+          </form>
         )}
       </div>
 

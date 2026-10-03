@@ -453,6 +453,17 @@ app.post('/api/gmail/run/stop', asyncH(async (req, res) => {
   res.json(r);
 }));
 
+// Jawab prompt TUI tool (pilihan menu, jumlah akun, dll) via stdin proses.
+// text kosong ("") berarti cukup Enter.
+app.post('/api/gmail/run/input', asyncH(async (req, res) => {
+  if (!(req.body) || typeof req.body.text !== 'string') {
+    return res.status(400).json({ error: 'field text wajib (string, boleh kosong utk Enter)' });
+  }
+  const r = gmailRunner.input(req.body.text);
+  if (r.error) return res.status(409).json({ error: r.error });
+  res.json(r);
+}));
+
 // Hapus akun beserta data & profil browsernya.
 app.delete('/api/accounts/:id', asyncH(async (req, res) => {
   const id = Number(req.params.id);

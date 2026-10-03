@@ -111,36 +111,72 @@ function startJob() {
   job = { status: 'running', startedAt: new Date().toISOString(), finishedAt: null, exitCode: null, imported: 0, log: [] };
   const j = job;
   pushLog(j, useInfinity
-    ? 'Membuka jendela Gmail Creator Pro v5 (open-source, Python/Playwright)...'
+    ? 'Menjalankan Gmail Creator Pro v5 (open-source, tersembunyi, log live di sini)...'
     : 'Membuka jendela Gmail Creator Pro (exe lama)...');
-  pushLog(j, 'Pilih menu di jendela tool. Hasil diimpor otomatis ke stok setelah jendelanya ditutup.');
 
-  const target = useInfinity ? INF_PY : EXE;
-  const cwd = useInfinity ? INF_DIR : TOOL_DIR;
-  const args = useInfinity
-    ? ['/c', 'start', '""', '/wait', `"${target}"`, 'auto_gmail_creator.py']
-    : ['/c', 'start', '""', '/wait', `"${target}"`];
+  if (useInfinity) pushLog(j, 'Jawab menu lewat tombol panel (endpoint /api/gmail/run/input) atau kirim dari UI.');
+
+  // Infinity: spawn Python LANGSUNG tanpa jendela (teruji: TUI rich aman dipipa,
+  // entry point-nya men-set UTF-8 errors=replace sendiri) sehingga panel dapat
+  // log live DAN mengirim pilihan menu via stdin. Pola `start /wait` HANYA untuk
+  // exe lama yang TUI-nya crash saat dipipa (butuh konsol nyata).
   let child;
   try {
-    child = spawn('cmd.exe', args, {
-      cwd,
-      stdio: 'ignore',
-      windowsHide: true,
-      windowsVerbatimArguments: true,
-      env: { ...process.env, PYTHONUTF8: '1', PYTHONIOENCODING: 'utf-8' },
-    });
+    child = useInfinity
+      ? spawn(INF_PY, ['-u', 'auto_gmail_creator.py'], {
+          cwd: INF_DIR,
+          stdio: ['pipe', 'pipe', 'pipe'],
+          windowsHide: true,
+          env: { ...process.env, PYTHONUTF8: '1', PYTHONIOENCODING: 'utf-8', PYTHONUNBUFFERED: '1' },
+        })
+      : spawn('cmd.exe', ['/c', 'start', '""', '/wait', `"${EXE}"`], {
+          cwd: TOOL_DIR,
+          stdio: 'ignore',
+          windowsHide: true,
+          windowsVerbatimArguments: true,
+          env: { ...process.env, PYTHONUTF8: '1', PYTHONIOENCODING: 'utf-8' },
+        });
   } catch (e) {
     j.status = 'failed'; j.finishedAt = new Date().toISOString();
     pushLog(j, 'Gagal menjalankan tool: ' + (e.message || e));
     return { ok: true, job: pub(j) };
   }
   j.child = child;
+  if (useInfinity) {
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
+    let buf = '';
+    let pendingIdx = -1; // indeks baris prompt-parsial (« ... ») yang belum selesai
+    const onChunk = (c) => {
+      buf += c;
+      let idx;
+      while ((idx = buf.search(/[\r\n]/)) >= 0) {
+        const line = buf.slice(0, idx);
+        buf = buf.slice(idx + 1);
+        pushLog(j, line);
+        pendingIdx = -1;
+      }
+      // Prompt tanpa newline (mis. "Select operation ... (1): ") tetap harus
+      // terlihat operator: tampilkan sebagai baris parsial yang diperbarui.
+      const rest = buf;
+      if (rest.trim()) {
+        const line = '» ' + rest.replace(/\x1b\[[0-9;]*[A-Za-z]/g, '').slice(0, 200);
+        if (pendingIdx >= 0 && pendingIdx < j.log.length) j.log[pendingIdx] = line;
+        else { j.log.push(line); pendingIdx = j.log.length - 1; }
+      } else {
+        pendingIdx = -1;
+      }
+    };
+    child.stdout.on('data', onChunk);
+    child.stderr.on('data', onChunk);
+  }
   child.on('error', (e) => {
     j.status = 'failed'; j.finishedAt = new Date().toISOString();
     pushLog(j, 'Proses gagal: ' + (e.message || e));
   });
   child.on('close', async (code) => {
     j.exitCode = code;
+    try { if (child.stdin && !child.stdin.destroyed) child.stdin.end(); } catch (e) { /* abaikan */ }
     pushLog(j, `Jendela tool ditutup (kode ${code}). Memeriksa hasil...`);
     try {
       const n = useInfinity ? await importInfinity((line) => pushLog(j, line)) : await importExe((line) => pushLog(j, line));
@@ -165,10 +201,23 @@ function stopJob() {
   return { ok: true };
 }
 
+// Kirim satu baris ke stdin tool infinity (jawaban menu/prompt).
+function sendInput(text) {
+  if (!job || job.status !== 'running' || !job.child || !job.child.stdin) return { error: 'no_running_job' };
+  try {
+    job.child.stdin.write(String(text).replace(/[\r\n]+$/, '') + '\n');
+    pushLog(job, `[panel] kirim: ${String(text).slice(0, 60)}`);
+    return { ok: true };
+  } catch (e) {
+    return { error: 'gagal menulis ke proses: ' + (e.message || e) };
+  }
+}
+
 module.exports = {
   status: () => pub(job),
   start: startJob,
   stop: stopJob,
+  input: sendInput,
   hasInfinity,
   hasExe: () => hasExe(),
 };
