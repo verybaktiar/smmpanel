@@ -5,7 +5,7 @@ import { toastOk, toastErr } from '../toast.js';
 import '../ui.css';
 import './Gmail.css';
 
-const SRC = { 'gmail-creator': 'Gmail Creator Pro', manual: 'Impor manual' };
+const SRC = { 'gmail-infinity': 'Gmail Infinity', 'gmail-creator': 'Gmail Creator', manual: 'Impor manual' };
 
 // Stok Gmail fresh untuk AutoCreate: daftar pool, impor massal, jalankan
 // Gmail Creator Pro, dan tarik (claim) dari halaman AutoCreate. Sumber data:
@@ -139,16 +139,17 @@ export default function Gmail() {
           <div>
             <h3 style={{ margin: 0 }}>Gmail Creator Pro</h3>
             <p className="modal-hint" style={{ margin: '4px 0 0' }}>
-              Membuka jendela tool terpisah: pilih menunya di sana (butuh Chrome di mesin ini).
-              Hasil diimpor otomatis ke stok setelah jendelanya ditutup.
-              {!stats || stats.hasBinary ? null : ' Binary belum diunduh: node scripts/fetch-gmail-creator.js'}
+              {stats && stats.hasPython
+                ? 'Backend open-source (Python/Playwright): membuka jendela tool terpisah, pilih menunya di sana. Hasil diimpor otomatis setelah jendela ditutup.'
+                : 'Membuka jendela tool terpisah: pilih menunya di sana (butuh Chrome di mesin ini). Hasil diimpor otomatis ke stok setelah jendelanya ditutup.'}
+              {!stats || stats.hasPython || stats.hasBinary ? null : ' Tool belum disiapkan: lihat tools/gmail-creator/README.md'}
             </p>
           </div>
           <div className="gmail-actions">
             {running ? (
               <button className="btn-danger-ghost" onClick={stopRun}>Hentikan</button>
             ) : (
-              <button className="btn-ghost" onClick={startRun} disabled={stats && !stats.hasBinary}>Jalankan</button>
+              <button className="btn-ghost" onClick={startRun} disabled={stats && !stats.hasPython && !stats.hasBinary}>Jalankan</button>
             )}
           </div>
         </div>

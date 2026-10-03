@@ -1,12 +1,17 @@
 'use strict';
-// Runner Gmail Creator Pro (tools/gmail-creator/auto_gmail_creator.exe).
-// Satu job dalam satu waktu. Temuan nyata 2026-10-03: TUI `rich` upstream
-// crash "UnicodeEncodeError: charmap codec" saat stdout-nya DIPIPA (renderer
-// legacy Windows meng-encode cp1252), dan PYTHONUTF8/PYTHONIOENCODING tidak
-// menolong karena kode upstream tertutup. Maka pola final: tool dapat jendela
-// konsolnya SENDIRI via `start /wait` (operator melihat dan mengendalikan
-// menunya langsung), panel tidak memipa stdout-nya sama sekali, dan hasil
-// data/accounts.json diimpor otomatis saat jendela ditutup.
+// Runner Gmail Creator: dua backend.
+// 1) gmail-infinity (PILIHAN UTAMA): open-source Python/Playwright di
+//    tools/gmail-infinity (klon + venv). Sudah diaudit 2026-10-03: tanpa
+//    exec/eval/obfuscation; hanya menghubungi Google, penyedia SMS opsional
+//    (5sim/sms-activate/getsms), solver captcha opsional, dan ipify.
+//    Hasil: data/database.db SQLite (tabel accounts, email + password polos,
+//    dienkripsi ulang saat masuk pool panel).
+// 2) auto_gmail_creator.exe (LAMA, fallback): closed-source, sekarang usang
+//    (selector kalah cepat dari perubahan UI Google).
+// Keduanya TUI konsol interaktif: panel membuka jendela konsolnya sendiri via
+// `start /wait` dan TIDAK memipa stdout (pelajaran 2026-10-03: rich crash
+// UnicodeEncodeError saat stdout dipipa). Setelah jendela ditutup, hasil
+// diimpor otomatis ke tabel gmail_pool.
 
 const { spawn } = require('child_process');
 const fs = require('fs');
@@ -16,6 +21,10 @@ const db = require('./db');
 const TOOL_DIR = path.join(__dirname, '..', 'tools', 'gmail-creator');
 const EXE = path.join(TOOL_DIR, 'auto_gmail_creator.exe');
 const ACCOUNTS_JSON = path.join(TOOL_DIR, 'data', 'accounts.json');
+
+const INF_DIR = path.join(__dirname, '..', 'tools', 'gmail-infinity');
+const INF_PY = path.join(INF_DIR, 'venv', 'Scripts', 'python.exe');
+const INF_DB = path.join(INF_DIR, 'data', 'database.db');
 
 let job = null; // satu job dalam satu waktu
 const MAX_LINES = 400;
@@ -35,9 +44,43 @@ function pub(j) {
   };
 }
 
-// Baca data/accounts.json, impor entri yang lebih baru dari t0 (hindari duplikat
-// dari run lama: tool menimpa/menambah file dengan seluruh riwayat akunnya).
-async function importResults(t0, logSink) {
+function hasInfinity() { return fs.existsSync(INF_PY); }
+function hasExe() { return fs.existsSync(EXE); }
+
+// Impor hasil gmail-infinity dari SQLite-nya. Semua baris tabel accounts adalah
+// akun yang berhasil dibuat (upsert saat sukses); duplikat ditolak UNIQUE pool.
+async function importInfinity(logSink) {
+  let DatabaseSync;
+  try {
+    ({ DatabaseSync } = require('node:sqlite'));
+  } catch (e) {
+    logSink('node:sqlite tidak tersedia: ' + (e.message || e));
+    return 0;
+  }
+  if (!fs.existsSync(INF_DB)) {
+    logSink('database.db tool belum ada (belum ada putaran sukses).');
+    return 0;
+  }
+  const d = new DatabaseSync(INF_DB, { readOnly: true });
+  let rows = [];
+  try {
+    rows = d.prepare('SELECT email, password FROM accounts ORDER BY id DESC').all();
+  } finally {
+    d.close();
+  }
+  let n = 0;
+  for (const r of rows) {
+    if (!r.email || !r.password) continue;
+    try {
+      await db.addGmail({ email: r.email, password: r.password, source: 'gmail-infinity' });
+      n++;
+    } catch (e) { /* duplikat / tak valid: lewati */ }
+  }
+  return n;
+}
+
+// Impor hasil exe lama dari data/accounts.json (format upstream lama).
+async function importExe(logSink) {
   let entries = [];
   try {
     const raw = fs.readFileSync(ACCOUNTS_JSON, 'utf8');
@@ -50,8 +93,6 @@ async function importResults(t0, logSink) {
   let n = 0;
   for (const e of entries) {
     if (!e || !e.email) continue;
-    const created = String(e.created_at || e.date || e.timestamp || '');
-    if (t0 && created && new Date(created).getTime() < t0) continue; // hasil run lama
     try {
       await db.addGmail({ email: e.email, password: e.password || '', source: 'gmail-creator' });
       n++;
@@ -62,26 +103,35 @@ async function importResults(t0, logSink) {
 
 function startJob() {
   if (job && job.status === 'running') return { error: 'already_running' };
-  if (process.platform !== 'win32') return { error: 'tool ini hanya berkas Windows (.exe)' };
-  if (!fs.existsSync(EXE)) return { error: 'binary belum diunduh. Jalankan: node scripts/fetch-gmail-creator.js' };
-  const t0 = Date.now() - 5000; // toleransi 5 dtk antara start dan waktu file
+  if (process.platform !== 'win32') return { error: 'tool ini hanya berkas Windows' };
+  const useInfinity = hasInfinity();
+  if (!useInfinity && !hasExe()) {
+    return { error: 'tool belum disiapkan (venv gmail-infinity dan exe sama-sama tidak ada)' };
+  }
   job = { status: 'running', startedAt: new Date().toISOString(), finishedAt: null, exitCode: null, imported: 0, log: [] };
   const j = job;
-  pushLog(j, 'Membuka jendela Gmail Creator Pro (mode 1 akun, tanpa proxy)...');
+  pushLog(j, useInfinity
+    ? 'Membuka jendela Gmail Creator Pro v5 (open-source, Python/Playwright)...'
+    : 'Membuka jendela Gmail Creator Pro (exe lama)...');
   pushLog(j, 'Pilih menu di jendela tool. Hasil diimpor otomatis ke stok setelah jendelanya ditutup.');
 
-  // `start "" /wait` membuka konsol BARU milik exe sendiri: TUI rich ter-render
-  // ke konsol nyata (bebas bug cp1252 pipa) dan operator bisa mengetik menunya.
-  // cmd /wait menunggu exe selesai sehingga event close = jendela ditutup.
+  const target = useInfinity ? INF_PY : EXE;
+  const cwd = useInfinity ? INF_DIR : TOOL_DIR;
+  const args = useInfinity
+    ? ['/c', 'start', '""', '/wait', `"${target}"`, 'auto_gmail_creator.py']
+    : ['/c', 'start', '""', '/wait', `"${target}"`];
   let child;
   try {
-    child = spawn('cmd.exe',
-      ['/c', 'start', '""', '/wait', `"${EXE}"`],
-      { cwd: TOOL_DIR, stdio: 'ignore', windowsHide: true, windowsVerbatimArguments: true,
-        env: { ...process.env, PYTHONUTF8: '1', PYTHONIOENCODING: 'utf-8' } });
+    child = spawn('cmd.exe', args, {
+      cwd,
+      stdio: 'ignore',
+      windowsHide: true,
+      windowsVerbatimArguments: true,
+      env: { ...process.env, PYTHONUTF8: '1', PYTHONIOENCODING: 'utf-8' },
+    });
   } catch (e) {
     j.status = 'failed'; j.finishedAt = new Date().toISOString();
-    pushLog(j, 'Gagal menjalankan exe: ' + (e.message || e));
+    pushLog(j, 'Gagal menjalankan tool: ' + (e.message || e));
     return { ok: true, job: pub(j) };
   }
   j.child = child;
@@ -93,9 +143,9 @@ function startJob() {
     j.exitCode = code;
     pushLog(j, `Jendela tool ditutup (kode ${code}). Memeriksa hasil...`);
     try {
-      const n = await importResults(t0, (line) => pushLog(j, line));
+      const n = useInfinity ? await importInfinity((line) => pushLog(j, line)) : await importExe((line) => pushLog(j, line));
       j.imported = n;
-      pushLog(j, n > 0 ? `${n} akun Gmail diimpor ke pool.` : 'Tidak ada akun baru di accounts.json.');
+      pushLog(j, n > 0 ? `${n} akun Gmail diimpor ke pool.` : 'Tidak ada akun baru untuk diimpor.');
     } catch (e) {
       pushLog(j, 'Gagal impor hasil: ' + (e.message || e));
     }
@@ -107,7 +157,7 @@ function startJob() {
 
 function stopJob() {
   if (!job || job.status !== 'running' || !job.child) return { error: 'no_running_job' };
-  // Hentikan SELURUH pohon proses: cmd (wait) + jendela exe-nya.
+  // Hentikan SELURUH pohon proses: cmd (wait) + jendela tool-nya.
   try {
     spawn('taskkill', ['/PID', String(job.child.pid), '/T', '/F'], { windowsHide: true });
   } catch (e) { /* abaikan */ }
@@ -119,5 +169,6 @@ module.exports = {
   status: () => pub(job),
   start: startJob,
   stop: stopJob,
-  hasBinary: () => fs.existsSync(EXE),
+  hasInfinity,
+  hasExe: () => hasExe(),
 };

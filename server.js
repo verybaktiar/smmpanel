@@ -408,7 +408,7 @@ app.get('/api/gmail', asyncH(async (req, res) => {
 app.get('/api/gmail/stats', asyncH(async (req, res) => {
   const stats = await db.gmailStats();
   const run = gmailRunner.status();
-  res.json({ ...stats, hasBinary: gmailRunner.hasBinary(), job: { status: run.status, imported: run.imported || 0 } });
+  res.json({ ...stats, hasBinary: gmailRunner.hasExe(), hasPython: gmailRunner.hasInfinity(), job: { status: run.status, imported: run.imported || 0 } });
 }));
 
 // Tarik satu Gmail untuk create: tandai terpakai lalu kirim kredensialnya.
@@ -837,8 +837,11 @@ app.put('/api/accounts/:id/proxy', asyncH(async (req, res) => {
   try { probe = await probeAccountIp(account); } catch (e) { probeError = String(e.message || e).slice(0, 160); }
   if (probe) {
     try {
-      const { resolveProxyGeo, localeForTz } = require('./src/stealth');
-      const g = await resolveProxyGeo(proxy);
+      // Geo dari IP PROBE (IP exit persis yang dipakai browser sticky) — BUKAN lookup
+      // CONNECT kedua dgn proxy raw: DI tanpa suffix sticky keluar negara ACAK
+      // (terbukti: probe Banjarmasin-ID tapi CONNECT raw dapat Moskow).
+      const { lookupIpGeo, localeForTz } = require('./src/stealth');
+      const g = await lookupIpGeo(probe.ip);
       if (g && g.timezone) {
         const locale = localeForTz(g.timezone);
         db.run(`UPDATE accounts SET timezone = ?, locale = ? WHERE id = ?`, [g.timezone, locale, account.id]);

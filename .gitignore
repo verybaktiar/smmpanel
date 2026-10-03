@@ -16,6 +16,8 @@ th-key.txt
 # Binary proprietary Gmail Creator Pro (52 MB) + hasil create-nya
 tools/gmail-creator/auto_gmail_creator.exe
 tools/gmail-creator/data/accounts.json
+# Klon Gmail-infinity (open-source, punya .git sendiri) + venv + data runtime
+tools/gmail-infinity/
 proxies-pool.txt
 akun-th.txt
 example-accounts.txt
