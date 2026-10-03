@@ -13,6 +13,9 @@ arsip/
 frontend/dist/
 # Data sensitif operasional: jangan pernah masuk repo
 th-key.txt
+# Binary proprietary Gmail Creator Pro (52 MB) + hasil create-nya
+tools/gmail-creator/auto_gmail_creator.exe
+tools/gmail-creator/data/accounts.json
 proxies-pool.txt
 akun-th.txt
 example-accounts.txt

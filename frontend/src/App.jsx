@@ -3,6 +3,7 @@ import Layout from './layout.jsx';
 import Dashboard from './Dashboard.jsx';
 import Accounts from './pages/Accounts.jsx';
 import Health from './pages/Health.jsx';
+import Gmail from './pages/Gmail.jsx';
 import Posting from './pages/Posting.jsx';
 import Farm from './pages/Farm.jsx';
 import Proxy from './pages/Proxy.jsx';
@@ -28,6 +29,7 @@ export default function App() {
           <Route index element={<Dashboard />} />
           <Route path="akun" element={<Accounts />} />
           <Route path="kesehatan" element={<Health />} />
+          <Route path="gmail" element={<Gmail />} />
           <Route path="posting" element={<Posting />} />
           <Route path="farm" element={<Farm />} />
           <Route path="proxy" element={<Proxy />} />

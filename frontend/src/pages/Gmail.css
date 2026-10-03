@@ -1,0 +1,26 @@
+/* Halaman Stok Gmail: kartu runner, badge status, log, modal impor. */
+
+.gmail-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+/* Kartu runner Creator */
+.gmail-run { padding: 16px 18px; margin-bottom: 14px; }
+.gmail-run-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+
+.gmail-badge { font-size: 12px; font-weight: 700; padding: 4px 12px; border-radius: 9999px;
+  background: rgba(255,255,255,.08); color: #a8b0b8; white-space: nowrap; }
+.gmail-badge.ok { background: rgba(46,196,120,.15); color: #57d99a; border: 1px solid rgba(46,196,120,.35); }
+.gmail-badge.used { background: rgba(240,180,41,.12); color: #f0b429; border: 1px solid rgba(240,180,41,.3); }
+
+/* Log live: blok monospace gelap, tinggi tetap, scroll sendiri (R-27: bukan kosong tanpa kabar). */
+.gmail-log { margin: 12px 0 0; padding: 12px 14px; border-radius: 12px; background: #101317;
+  border: 1px solid rgba(255,255,255,.08); color: #b9c2cb; font-size: 12px; line-height: 1.55;
+  max-height: 260px; overflow: auto; white-space: pre-wrap; word-break: break-word; }
+
+/* Kolom aksi tabel: tombol hapus ghost merah (satu bahasa dengan Accounts). */
+.gmail-del { text-align: right; }
+.gmail-del .btn-danger-ghost { padding: 4px 12px; font-size: 12px; }
+
+@media (max-width: 640px) {
+  .gmail-run-head { flex-direction: column; align-items: stretch; }
+  .gmail-del { text-align: left; }
+}

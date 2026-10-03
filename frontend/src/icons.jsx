@@ -19,6 +19,7 @@ const PATHS = {
   chart: ['<path d="M4 20h16"/><path d="M6.5 20v-5M12 20V6M17.5 20v-8"/>'],
   chat: ['<path d="M20 12a7.5 7.5 0 0 1-7.5 7.5c-1.4 0-2.8-.4-3.9-1L4 19.5l1-4.3A7.5 7.5 0 1 1 20 12z"/>'],
   bolt: ['<path d="M13 2 4.5 13.5H11L10 22l8.5-11.5H12z"/>'],
+  mail: ['<rect x="3.5" y="5.5" width="17" height="13" rx="2.5"/><path d="M4.5 7.5 12 13l7.5-5.5"/>'],
 };
 
 export default function Icon({ name, size = 16 }) {

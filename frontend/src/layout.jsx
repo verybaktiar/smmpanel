@@ -36,6 +36,7 @@ const GROUPS = [
     items: [
       { to: '/akun', icon: 'users', label: 'Semua Akun' },
       { to: '/kesehatan', icon: 'grid', label: 'Kesehatan Akun' },
+      { to: '/gmail', icon: 'mail', label: 'Stok Gmail' },
       { to: '/history', icon: 'clock', label: 'Riwayat' },
       { to: '/monitoring', icon: 'chart', label: 'Monitoring' },
       { to: '/fleet', icon: 'phone', label: 'Fleet HP' },
