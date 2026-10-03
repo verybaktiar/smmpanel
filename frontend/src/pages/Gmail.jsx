@@ -81,7 +81,7 @@ export default function Gmail() {
   const startRun = async () => {
     const r = await api('/api/gmail/run', { method: 'POST', body: '{}' });
     if (!r || r.error) { toastErr(r.error === 'already_running' ? 'Proses masih berjalan' : r.error || 'Gagal memulai'); return; }
-    toastOk('Gmail Creator Pro dijalankan, pantau log di bawah');
+    toastOk('Jendela Gmail Creator Pro terbuka: pilih menu di sana');
     load(attempt + 1);
   };
 
@@ -139,7 +139,8 @@ export default function Gmail() {
           <div>
             <h3 style={{ margin: 0 }}>Gmail Creator Pro</h3>
             <p className="modal-hint" style={{ margin: '4px 0 0' }}>
-              Jalankan pembuat akun (mode 1 akun, butuh Chrome di mesin ini). Hasilnya masuk otomatis ke stok.
+              Membuka jendela tool terpisah: pilih menunya di sana (butuh Chrome di mesin ini).
+              Hasil diimpor otomatis ke stok setelah jendelanya ditutup.
               {!stats || stats.hasBinary ? null : ' Binary belum diunduh: node scripts/fetch-gmail-creator.js'}
             </p>
           </div>

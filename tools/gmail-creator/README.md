@@ -33,10 +33,25 @@ interaktif, target Windows).
 
 - Exe butuh Chrome terpasang di mesin server dan, untuk hasil yang layak, proxy
   yang benar (config upstream, isian manual di `config/`).
-- Mode jalan otomatis terbatas: panel mengirim pilihan menu "buat akun" ke stdin
-  proses. Bila tool upstream berubah alur menunya, jalankan manual:
-  `cd tools/gmail-creator && ./auto_gmail_creator.exe`, lalu impor JSON-nya.
-- Setelah satu putaran selesai, tool kembali ke menu; tekan Hentikan di panel
-  untuk mematikan prosesnya.
+
+## Masalah dikenal
+
+- **TUI-nya tidak bisa dijalankan tanpa konsol nyata.** Dua kegagalan terukur
+  saat panel mencoba memipakan stdout (mode tersembunyi):
+  1. Banner `rich` crash `UnicodeEncodeError: 'charmap' codec` karena renderer
+     legacy Windows meng-encode cp1252; `PYTHONUTF8=1`/`PYTHONIOENCODING` TIDAK
+     menolong (kode upstream tertutup, jalur render di luar kendali env).
+  2. Setelah env diperbaiki sekalipun, menu tetap tidak bisa diandalkan via
+     stdin pipa: output interaktif `rich` tidak cocok untuk di-pompa.
+  Solusi final (dipakai `src/gmail-creator-runner.js`): tool dijalankan dengan
+  jendela konsolnya sendiri via `cmd /c start "" /wait`, panel TIDAK memipa
+  stdout-nya, operator memilih menu langsung di jendela itu, dan hasil
+  `data/accounts.json` diimpor otomatis begitu jendela ditutup.
+- Jalankan manual tetap bisa: `cd tools/gmail-creator` lalu
+  `auto_gmail_creator.exe`, hasilnya diimpor lewat tombol Impor di halaman
+  Stok Gmail.
+
+- Tombol "Hentikan" di panel menutup seluruh pohon proses (cmd wait + jendela
+  exe) via taskkill /T. Proses signup yang sedang berjalan tentu ikut gugur.
 - Kualitas dan risiko pembuatan akun otomatis (pemeriksaan Google, 5sim, proxy
   gratis) ada di luar kendali panel. Panel hanya mengelola stok dan prosesnya.
