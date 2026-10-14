@@ -20,11 +20,14 @@
 @media (max-width: 720px) {
   .run-row { flex-direction: column; }
 }
-.result-panel { margin-bottom: 16px; border-left: 3px solid #8ab4ff; }
-.cred-list { display: flex; flex-direction: column; gap: 6px; margin: 10px 0; }
+
+/* ====== Percantik: kartu hasil dgn breathing & border states, copy buttons ====== */
+.result-panel { margin-bottom: 20px; border-radius: 16px; padding: 20px 22px; }
+.cred-list { display: flex; flex-direction: column; gap: 8px; margin: 14px 0; }
 .cred-row { display: flex; gap: 10px; align-items: center; }
 .cred-label { flex-shrink: 0; width: 84px; font-size: 12px; color: #9aa0aa; }
-.cred-val { flex: 1; min-width: 0; font-size: 13px; color: #e8e8ec; background: rgba(0,0,0,.35); border: 1px solid rgba(255,255,255,.09); border-radius: 8px; padding: 6px 10px; overflow-x: auto; white-space: nowrap; }
+.cred-val { flex: 1; min-width: 0; font-size: 13px; color: #e8e8ec; background: rgba(0,0,0,.35); border: 1px solid rgba(255,255,255,.09); border-radius: 8px; padding: 6px 10px; overflow-x: auto; white-space: nowrap; transition: border-color .18s; }
+.cred-val:hover { border-color: rgba(138,180,255,.4); }
 .cred-copy { flex-shrink: 0; }
 .cred-birth { font-size: 12px; color: #fbbf24; margin-top: 4px; }
 .cred-birth code { font-family: monospace; }
@@ -35,10 +38,6 @@
 .probe-verdict.rc-done { color: #4ade80; background: rgba(74,222,128,.08); border: 1px solid rgba(74,222,128,.3); }
 .probe-verdict.rc-bad { color: #ff7a86; background: rgba(226,59,74,.08); border: 1px solid rgba(226,59,74,.4); }
 .probe-verdict.rc-run { color: #fbbf24; background: rgba(251,191,36,.08); border: 1px solid rgba(251,191,36,.3); }
-.ac-note { margin-bottom: 16px; font-size: 13px; }
-.ac-note strong { display: block; margin-bottom: 2px; }
-.ac-ok { border-left: 3px solid #4ade80; }
-.ac-warn { border-left: 3px solid #fbbf24; }
 .ac-steps { display: flex; flex-direction: column; gap: 12px; }
 .ac-step { display: flex; gap: 14px; align-items: flex-start; margin: 0; }
 .ac-num { flex-shrink: 0; width: 30px; height: 30px; border-radius: 50%; background: rgba(73,79,223,.2); border: 1px solid #494fdf; color: #fff; font-weight: 700; font-size: 13px; display: flex; align-items: center; justify-content: center; }
@@ -54,3 +53,158 @@
 
 /* Hero tint TikTok (sama seperti di Accounts.css) — supaya halaman ini tak bergantung urutan load modul lain */
 .acc-tiktok { background: linear-gradient(120deg, rgba(37,244,238,.10), transparent 60%), rgba(255,255,255,.02); }
+
+/* IG Auto-Create pakai gradient pink IG yang sama dengan halaman Akun IG — teritori halaman terlihat. */
+.acc-ig { background: linear-gradient(120deg, rgba(221,42,123,.14), transparent 55%), rgba(255,255,255,.02); }
+
+/* FB rombak: tahapan jelas 1→2, satu tugas per langkah, tanpa teks saling timpa. */
+.fb-steps { display: flex; flex-direction: column; gap: 0; margin-bottom: 16px; padding: 0; overflow: hidden; }
+.fb-step { display: flex; gap: 14px; align-items: flex-start; padding: 18px 20px; transition: background .18s; }
+.fb-step:hover { background: rgba(255,255,255,.02); }
+.fb-step + .fb-step { border-top: 1px solid rgba(255,255,255,.07); }
+.fb-step-num { flex-shrink: 0; width: 30px; height: 30px; border-radius: 8px; background: rgba(24,119,242,.16); border: 1px solid rgba(24,119,242,.45); color: #8ab4ff; font-weight: 700; font-size: 14px; display: flex; align-items: center; justify-content: center; }
+.fb-step-body { flex: 1; min-width: 0; }
+.fb-step-body strong { font-size: 14px; }
+.fb-step-body > .muted { font-size: 13px; margin: 4px 0 10px; line-height: 1.55; }
+.fb-step-body .inp { max-width: 420px; }
+.fb-step-extra { margin-top: 8px; }
+/* ===== Mode Via HP: papan dua kolom (pool HP + job). Chip status reuse run-pill. ====== */
+.hp-board { margin-bottom: 16px; }
+.hp-board-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.hp-col-title { display: block; font-size: 13px; color: #9aa0aa; margin-bottom: 10px; text-transform: uppercase; letter-spacing: .04em; }
+.hp-job-sum { display: block; font-size: 12.5px; color: #c9cdd4; margin: 4px 0 10px; }
+.hp-col { display: flex; flex-direction: column; gap: 10px; }
+.hp-row { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border: 1px solid rgba(255,255,255,.07); border-radius: 12px; background: rgba(255,255,255,.015); transition: border-color .18s; }
+.hp-row:hover { border-color: rgba(255,255,255,.14); }
+.hp-meta { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.hp-meta strong { font-size: 14px; }
+.hp-meta .muted { font-size: 12px; }
+.hp-meta .run-pill { margin-left: auto; }
+.hp-job-note { font-size: 12.5px; }
+.hp-gmail-sel { max-width: 420px; font-size: 12.5px; }
+.hp-actions { display: flex; gap: 8px; }
+.hp-board .otp-card { margin-top: 4px; }
+@media (max-width: 880px) {
+  .hp-board-grid { grid-template-columns: 1fr; }
+  .hp-actions { flex-direction: column; }
+  .hp-actions .btn-primary, .hp-actions .btn-ghost { width: 100%; }
+}
+
+/* R-03 mobile: chip grup + baris keypad boleh wrap agar tidak memicu scroll
+   horizontal 320px; chip IP panjang (IP·ASN·kota) pecah per kata. */
+.ip-chip-row { display: flex; gap: 8px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
+.ip-chip { display: inline-flex; gap: 6px; align-items: center; font-size: 12.5px; border-radius: 9999px; padding: 5px 12px; border: 1px solid transparent; max-width: 100%; }
+.ip-chip code { font-family: monospace; font-size: 12px; overflow-wrap: anywhere; word-break: break-all; }
+.ip-chip .muted, .ip-chip span { overflow-wrap: anywhere; }
+.ip-chip-ok { color: #4ade80; border-color: rgba(74,222,128,.3); background: rgba(74,222,128,.07); }
+.ip-chip-bad { color: #ff7a86; border-color: rgba(226,59,74,.4); background: rgba(226,59,74,.08); }
+.ip-chip-wait { color: #fbbf24; border-color: rgba(251,191,36,.3); background: rgba(251,191,36,.07); }
+.ip-chip-recheck { font-size: 12px; padding: 3px 10px; }
+
+.fb-run-cta { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.fb-big-btn { padding: 10px 22px; font-size: 14px; }
+.fb-steps .run-log { margin-top: 12px; max-width: 640px; }
+.res-note { font-size: 13px; margin: 8px 0 0; }
+.fb-warn { margin-top: 8px; font-size: 12.5px; color: #fbbf24; }
+.fb-ok { margin-top: 8px; font-size: 12.5px; color: #4ade80; }
+.tech-details { margin-top: 10px; border: 1px solid rgba(255,255,255,.09); border-radius: 8px; padding: 8px 12px; }
+.tech-details summary { cursor: pointer; font-size: 12.5px; color: #9aa0aa; user-select: none; }
+.tech-details[open] summary { margin-bottom: 4px; }
+.tech-details .cred-list { margin: 4px 0; }
+.result-warn { border-left-color: #fbbf24; }
+/* Pengingat simpan kredensial + hardening 2FA (kasus fajar_puspita54):
+   sisi kiri aksen kuning (warn status) — solid, bukan glass, tanpa glow. */
+.save-reminder { border-left: 3px solid #fbbf24; background: rgba(251,191,36,.06);
+  border-radius: 8px; padding: 12px 16px; margin-bottom: 12px; }
+.save-reminder strong { font-size: 13.5px; }
+.save-reminder ul { margin: 6px 0 0; padding-left: 18px; }
+.save-reminder li { font-size: 12.5px; line-height: 1.6; color: #c9cdd4; }
+@media (max-width: 720px) {
+  .fb-run-cta { flex-direction: column; align-items: stretch; }
+  .fb-big-btn { width: 100%; }
+}
+
+/* Kartu Bulk IG: chip konfigurasi ringkas + drawer accordion (buka satu menutup
+   yang lain). Aksi satu baris di bawah. */
+.bulk-card { padding: 16px 18px; }
+.bulk-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.bulk-title { font-size: 14.5px; }
+.bulk-sub { font-size: 12.5px; margin-left: 10px; }
+.bulk-line { font-size: 12.5px; margin: 6px 0 12px; }
+.bulk-chipbox { display: flex; gap: 10px 22px; flex-wrap: wrap; align-items: center;
+  padding: 10px 14px; border-radius: 10px; background: rgba(255,255,255,.035); }
+/* R-03: wrap agar grup chip (label + 10 tombol angka) tidak memicu overflow 320px. */
+.bulk-chip-group { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.bulk-chip-label { font-size: 11.5px; color: #9aa0aa; letter-spacing: .02em; }
+.bulk-count-btns { display: flex; gap: 4px; flex-wrap: wrap; max-width: 100%; }
+/* R-03: keypad angka 40x38 (dulu 34x27) agar tap target nyaman di HP. */
+.bulk-count-btn { min-width: 40px; min-height: 42px; padding: 5px 0; border-radius: 8px; border: 1px solid rgba(255,255,255,.14);
+  background: transparent; color: #c9cdd4; font-size: 13px; font-weight: 600; cursor: pointer; }
+.bulk-count-btn:hover { border-color: rgba(255,255,255,.3); }
+.bulk-count-btn.on { background: rgba(124,92,255,.18); border-color: rgba(124,92,255,.5); color: #cdc4ff; }
+.bulk-count-btn:disabled { opacity: .5; cursor: not-allowed; }
+/* R-03: tombol picker 42px min-height. */
+.bulk-pick-btn { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px;
+  min-height: 42px;
+  border-radius: 8px; border: 1px solid rgba(255,255,255,.14); background: transparent;
+  color: #c9cdd4; font-size: 12.5px; cursor: pointer; }
+.bulk-pick-btn:hover { border-color: rgba(255,255,255,.3); }
+.bulk-pick-btn.on { border-color: rgba(124,92,255,.5); color: #cdc4ff; }
+.bulk-pick-caret { font-size: 9px; opacity: .6; }
+.bulk-pick-warn { font-size: 11.5px; }
+.bulk-pick-warn.ok { color: #4ade80; }
+.bulk-pick-warn.bad { color: #fbbf24; }
+/* Drawer accordion: hanya bisa satu terbuka (state di JSX saling menutup). */
+.bulk-drawer { margin-top: 8px; padding: 10px 14px 8px; border: 1px solid rgba(255,255,255,.09);
+  border-radius: 10px; background: rgba(0,0,0,.28); display: flex; flex-direction: column;
+  gap: 2px; max-height: 230px; overflow: auto; animation: bulk-drop .22s ease-out both; }
+@keyframes bulk-drop { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+.bulk-drawer-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+  padding: 2px 4px 8px; border-bottom: 1px solid rgba(255,255,255,.07); margin-bottom: 4px; }
+.bulk-drawer-head strong { font-size: 12.5px; }
+.bulk-drawer-count { font-size: 11.5px; color: #9aa0aa; }
+.bulk-drawer-note { font-size: 11.5px; margin: 8px 0 2px; }
+.bulk-pick-chip { display: flex; gap: 10px; align-items: center; font-size: 12.5px;
+  cursor: pointer; padding: 5px 6px; border-radius: 7px; line-height: 1.5; }
+.bulk-pick-chip:hover { background: rgba(255,255,255,.05); }
+.bulk-pick-chip.checked { background: rgba(124,92,255,.10); }
+.bulk-pick-chip input { flex-shrink: 0; }
+.bulk-pick-name { font-weight: 600; flex-shrink: 0; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bulk-pick-host { font-size: 11.5px; color: #9aa0aa; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bulk-pick-meta { font-style: normal; color: #9aa0aa; font-size: 11.5px; margin-left: auto; flex-shrink: 0; }
+@media (prefers-reduced-motion: reduce) { .bulk-drawer { animation: none; } }
+.bulk-action { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
+.bulk-start { padding: 9px 20px; }
+.bulk-short { font-size: 12px; }
+.bulk-results { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+.bulk-result-row { display: flex; gap: 10px; align-items: center; font-size: 13px; }
+.bulk-result-row .muted { font-size: 12.5px; word-break: break-all; }
+.bulk-log { margin-top: 8px; }
+.bulk-log summary { cursor: pointer; font-size: 12.5px; user-select: none; }
+.bulk-log .job-log { margin-top: 6px; max-height: 220px; overflow: auto; }
+
+/* Kartu OTP: muncul dengan spring pop (kinetics) — ring berputar saat menunggu
+   input; berubah hijau tenang saat kode terikirim. Reduced-motion: tanpa pop. */
+.otp-card { display: flex; gap: 14px; align-items: flex-start; margin-top: 12px;
+  padding: 14px 16px; border-radius: 12px;
+  background: rgba(240,150,20,.08); border: 1px solid rgba(240,150,20,.4);
+  animation: otp-pop .5s cubic-bezier(.21,1.02,.73,1) both; }
+.otp-card.otp-sent { background: rgba(46,196,120,.08); border-color: rgba(46,196,120,.4); }
+@keyframes otp-pop { from { opacity: 0; transform: translateY(10px) scale(.96); } to { opacity: 1; transform: none; } }
+.otp-ring { width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0; margin-top: 2px;
+  border: 3px solid rgba(240,150,20,.25); border-top-color: #ffb35c;
+  animation: spin 1s linear infinite; }
+.otp-sent .otp-ring { border-color: rgba(46,196,120,.25); border-top-color: #57d99a; animation-duration: 2s; }
+.otp-body { flex: 1; min-width: 0; }
+.otp-body strong { font-size: 14px; }
+.otp-body .muted { font-size: 13px; margin: 4px 0 10px; }
+.otp-input-row { display: flex; gap: 8px; max-width: 420px; }
+.otp-input { flex: 1; font-size: 18px; letter-spacing: 4px; font-weight: 600; font-variant-numeric: tabular-nums; }
+@media (max-width: 640px) {
+  .otp-input-row { flex-direction: column; }
+  .otp-input-row .btn-primary { width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .otp-card { animation: none; }
+  .otp-ring { animation-duration: 2.4s; }
+}

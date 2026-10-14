@@ -32,7 +32,7 @@ export default function History() {
   // Deep-link dari halaman Engagement: /history?tab=engagement&accountId=N
   const [acc, setAcc] = useState('all');
   const [accId, setAccId] = useState(params.get('accountId') || 'all');
-  const [res, setRes] = useState('all');
+  const [res, setRes] = useState(params.get('res') === 'ok' || params.get('res') === 'bad' ? params.get('res') : 'all');
   const [source, setSource] = useState(params.get('tab') === 'engagement' ? 'engagement' : 'posting');
   const [engAction, setEngAction] = useState('all');
   const [failed, setFailed] = useState(false); // R-27: gagal fetch = error interaktif, bukan "tidak ada riwayat"

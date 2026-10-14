@@ -6,17 +6,34 @@
 .grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 @media (max-width: 720px) { .grid2 { grid-template-columns: minmax(0, 1fr); } }
 .inp { background: rgba(255,255,255,.02); border: 1px solid rgba(255,255,255,.09); color: #fff; border-radius: 12px; padding: 10px 14px; font-size: 13px; width: 100%; }
+/* R-03: input/select min 42px agar tap target nyaman di desktop dan layar sentuh. */
+input.inp, select.inp { min-height: 42px; }
 select.inp option { background: #191c1f; }
 textarea.inp { min-height: 80px; resize: vertical; }
 label.f { font-size: 12px; color: #8d969e; display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
-.btn-primary { background: #494fdf; color: #fff; border: none; border-radius: 9999px; padding: 10px 22px; font-size: 13px; font-weight: 600; cursor: pointer; }
-.btn-primary:hover { opacity: .88; } .btn-primary:disabled { opacity: .5; }
-.btn-ghost { background: rgba(244,244,244,.07); border: 1px solid rgba(255,255,255,.09); color: #f4f4f4; border-radius: 9999px; padding: 8px 18px; font-size: 13px; cursor: pointer; }
-.btn-ghost:hover { background: rgba(244,244,244,.13); } .btn-ghost:disabled { opacity: .4; }
-.btn-danger-ghost { background: transparent; border: 1px solid rgba(226,59,74,.4); color: #ff7a86; border-radius: 9999px; padding: 7px 14px; font-size: 12px; cursor: pointer; }
+/* Sistem tombol global: satu hierarki dipakai semua halaman.
+   Primary = aksi utama solid ungu (konsekuen #494fdf); ghost = aksi sekunder;
+   danger-ghost = merusak; press spring dari kinetics (reduced-motion dinonaktifkan di bawah). */
+.btn-primary { background: #494fdf; color: #fff; border: none; border-radius: 9999px; padding: 10px 22px; font-size: 13px; font-weight: 600; cursor: pointer; min-height: 42px; transition: background .18s, transform .18s cubic-bezier(0.34, 1.56, 0.64, 1), opacity .18s; }
+.btn-primary:hover:not(:disabled) { background: #5b61e8; }
+.btn-primary:active:not(:disabled) { transform: scale(.96); }
+.btn-primary:disabled { opacity: .5; cursor: not-allowed; }
+.btn-ghost { background: rgba(244,244,244,.07); border: 1px solid rgba(255,255,255,.09); color: #f4f4f4; border-radius: 9999px; padding: 8px 18px; font-size: 13px; cursor: pointer; min-height: 42px; transition: background .18s, border-color .18s, transform .18s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.btn-ghost:hover:not(:disabled) { background: rgba(244,244,244,.13); }
+.btn-ghost:active:not(:disabled) { transform: scale(.96); }
+.btn-ghost:disabled { opacity: .4; cursor: not-allowed; }
+.btn-danger-ghost { background: transparent; border: 1px solid rgba(226,59,74,.4); color: #ff7a86; border-radius: 9999px; padding: 7px 14px; font-size: 12px; cursor: pointer; min-height: 42px; transition: background .18s, border-color .18s, color .18s, transform .18s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.btn-danger-ghost:hover:not(:disabled) { background: rgba(226,59,74,.08); border-color: rgba(226,59,74,.6); }
+.btn-danger-ghost:active:not(:disabled) { transform: scale(.96); }
+.btn-danger-ghost:disabled { opacity: .4; cursor: not-allowed; }
+@media (prefers-reduced-motion: reduce) {
+  .btn-primary, .btn-ghost, .btn-danger-ghost { transition: none; }
+  .btn-primary:active, .btn-ghost:active, .btn-danger-ghost:active { transform: none; }
+}
 .muted { color: #8d969e; }
 .badge { padding: 3px 11px; border-radius: 9999px; font-size: 11px; font-weight: 600; display: inline-block; }
 .b-active { background: rgba(0,168,126,.18); color: #2dd4a7; }
+.b-warn { background: rgba(240,164,40,.16); color: #f0a428; }
 .b-failed { background: rgba(226,59,74,.14); color: #ff7a86; }
 .b-done { background: rgba(0,168,126,.18); color: #2dd4a7; }
 .b-pending { background: rgba(236,126,0,.15); color: #fbbf24; }
@@ -25,7 +42,8 @@ label.f { font-size: 12px; color: #8d969e; display: flex; flex-direction: column
 .b-ig { background: rgba(221,42,123,.15); color: #f06292; }
 .b-tiktok { background: rgba(37,244,238,.12); color: #5eead4; }
 /* R-31: pill status global agar konsisten di semua halaman. */
-.pill { display: inline-block; font-size: 11.5px; font-weight: 600; border-radius: 9999px; padding: 4px 12px; border: 1px solid transparent; white-space: nowrap; }
+/* R-03: min-height 30px agar pill cukup terbaca/tappable utk elemen interaktif. */
+.pill { display: inline-block; font-size: 11.5px; font-weight: 600; border-radius: 9999px; padding: 4px 12px; border: 1px solid transparent; white-space: nowrap; min-height: 30px; line-height: 20px; box-sizing: border-box; }
 .p-done { color: #4ade80; border-color: rgba(74,222,128,.35); background: rgba(74,222,128,.08); }
 .p-run { color: #fbbf24; border-color: rgba(251,191,36,.35); background: rgba(251,191,36,.08); }
 .p-wait { color: #9aa0aa; border-color: rgba(154,160,170,.35); background: rgba(154,160,170,.08); }

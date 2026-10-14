@@ -3,6 +3,8 @@
 .like-url a { color: #8ab4ff; text-decoration: none; }
 .like-url a:hover { text-decoration: underline; }
 /* R-31: pill status pindah ke ui.css agar global. */
+/* R-03: baris order URL + Hapus perlu ruang; URL jadi blok agar tidak mendorong lebar. */
+.like-url { overflow-wrap: anywhere; word-break: break-all; }
 /* R-31: panel ringkasan + cara pakai agar halaman order tidak kosong dan pemula paham alur. */
 .like-grid { display: grid; grid-template-columns: 1fr 280px; gap: 16px; align-items: start; }
 .like-grid .card { margin: 0; }

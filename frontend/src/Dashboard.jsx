@@ -34,6 +34,22 @@ function ago(dt) {
   return future ? `dalam ${txt}` : `${txt} lalu`;
 }
 
+// D9: duplikat kejadian (akun+platform+status) belum lewat 24 jam dihitung satu kejadian,
+// supaya feed tidak terlihat membeku pada baris yang sama.
+function dedupeLogs(list) {
+  const seen = {};
+  const out = [];
+  for (const l of list) {
+    const k = `${l.account}|${l.platform}|${l.status}`;
+    const t = l.created_at ? new Date(l.created_at).getTime() : 0;
+    if (seen[k] !== undefined && Math.abs(t - seen[k]) < 86400000) continue;
+    seen[k] = t;
+    out.push(l);
+  }
+  return out;
+}
+
+// R-29: semua status log dikompres ke 3 kelompok warna (ok/warn/bad); tipe baru otomatis ikut kelompok.
 function dotFor(status = '') {
   if (/posted|like_ok|done|completed|active|login_ok/.test(status)) return 'ok';
   if (/fail|error|checkpoint/.test(status)) return 'bad';
@@ -48,6 +64,12 @@ export default function Dashboard() {
   const [queue, setQueue] = useState([]);
   const [orders, setOrders] = useState([]);
   const [workers, setWorkers] = useState(null); // null = belum tahu, false = PG/registry tak tersedia
+  const [wd, setWd] = useState(null); // watchdog farm: {fails, alarmed, lastProbeAt, episodes}
+  const [trend, setTrend] = useState(null); // [{d, c}] akun beraktivitas per hari, 7 hari
+  // D5: jangan tampilkan "0 HP"/"tidak terdeteksi" saat fetch-nya gagal; setiap sumber punya status sendiri.
+  const [apiOk, setApiOk] = useState(null);
+  const [farmFail, setFarmFail] = useState(null);
+  const [workerState, setWorkerState] = useState('unknown'); // unknown | ok | fail
   const [loading, setLoading] = useState(true);
   const [freshIds, setFreshIds] = useState([]);
   const [updatedAt, setUpdatedAt] = useState(null);
@@ -57,7 +79,7 @@ export default function Dashboard() {
 
   const fetchAll = useCallback(async () => {
     try {
-      const [s, a, l, f, q, o, w] = await Promise.all([
+      const [s, a, l, f, q, o, w, t, wdSt] = await Promise.all([
         api('/api/stats'),
         api('/api/accounts'),
         api('/api/logs'),
@@ -65,7 +87,10 @@ export default function Dashboard() {
         api('/api/schedules').catch(() => []),
         api('/api/smm/like-orders').catch(() => []),
         api('/api/workers/status').catch(() => false), // 503 saat PG mati -> false
+        api('/api/stats/trend').catch(() => null),
+        api('/api/farm/watchdog').catch(() => null),
       ]);
+      setApiOk(!!s && !s.error);
       if (s && !s.error) setStats(s);
       if (Array.isArray(a)) setAccounts(a);
       else if (Array.isArray(a?.accounts)) setAccounts(a.accounts);
@@ -77,8 +102,10 @@ export default function Dashboard() {
           setFreshIds(fresh.slice(0, 6));
           setTimeout(() => setFreshIds([]), 3000);
         }
-        setLogs(l.slice(0, 6));
+        // D2: feed hanya kejadian ≤48 jam, sisanya tugas Riwayat.
+        setLogs(dedupeLogs(l).filter((x) => x.created_at && Date.now() - new Date(x.created_at).getTime() < 172800000).slice(0, 6));
       }
+      setFarmFail(!Array.isArray(f));
       if (Array.isArray(f)) setFarm(f);
       if (Array.isArray(q)) {
         const today = new Date().toISOString().slice(0, 10);
@@ -91,9 +118,13 @@ export default function Dashboard() {
           .sort((x, y) => (rank[x.status] ?? 9) - (rank[y.status] ?? 9));
         setOrders(act.slice(0, 5));
       }
-      setWorkers(w === false ? false : (w && !w.error ? w : null));
+      const wOk = !!w && !w.error;
+      setWorkers(wOk ? w : false);
+      setWorkerState(wOk ? 'ok' : 'fail');
+      setTrend(Array.isArray(t) && t.length ? t : []);
+      setWd(wdSt && !wdSt.error ? wdSt : null);
       setUpdatedAt(Date.now());
-    } catch { /* tampilkan data lama */ }
+    } catch { setApiOk(false); /* tampilkan data lama */ }
     finally { setLoading(false); }
   }, []);
 
@@ -107,7 +138,7 @@ export default function Dashboard() {
           setFreshIds(fresh.slice(0, 6));
           setTimeout(() => setFreshIds([]), 3000);
         }
-        setLogs(l.slice(0, 6));
+        setLogs(dedupeLogs(l).filter((x) => x.created_at && Date.now() - new Date(x.created_at).getTime() < 172800000).slice(0, 6));
       }
     } catch { /* abaikan, tunggu siklus berikut */ }
   }, []);
@@ -126,9 +157,7 @@ export default function Dashboard() {
   // Hanya hitung worker dengan heartbeat 24 jam terakhir (baris lama usang tak ikut).
   const seen24 = workerList.filter((w) => w.last_seen && Date.now() - new Date(w.last_seen).getTime() < 86400000);
   const workerHealthy = seen24.filter((w) => String(w.status || w.health || '').toUpperCase() === 'HEALTHY').length;
-  const workerSummary = !workers ? 'tak terdeteksi'
-    : seen24.length === 0 ? 'belum ada heartbeat'
-    : `${workerHealthy}/${seen24.length} sehat`;
+  const workerSummary = seen24.length === 0 ? 'belum ada heartbeat' : `${workerHealthy}/${seen24.length} sehat`;
   const likeStat = orders.length === 0 ? null : orders.reduce((s, o) => {
     s.total += Number(o.target_likes) || 0;
     s.done += Number(o.completed_likes) || 0;
@@ -144,7 +173,7 @@ export default function Dashboard() {
       <header className="dash-hero hero-top">
         <div>
           <div className="eyebrow">{new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
-          <h1>Selamat {new Date().getHours() < 11 ? 'pagi' : new Date().getHours() < 15 ? 'siang' : new Date().getHours() < 19 ? 'sore' : 'malam'}</h1>
+          <h1>Ringkasan hari ini</h1>
           <p className="hero-sum"><span><i className="dot ok" />{active} akun aktif</span><span><i className="dot warn" />{queue.length} antrean</span><span><i className={`dot ${(farm?.length || 0) > 0 ? 'ok' : 'warn'}`} />{farm?.length || 0} HP terhubung</span></p>
           <div className="quick">
             <Link className="q-fb" to="/posting?platform=fb"><Icon name="pen" size={14} /> Post FB</Link>
@@ -153,9 +182,8 @@ export default function Dashboard() {
             <Link to="/warming"><Icon name="flame" size={14} /> Warming</Link>
           </div>
         </div>
-        <div className="dash-live live-pill" title={updatedAt ? 'Diperbarui ' + ago(new Date(updatedAt).toISOString()) : ''}>
-          <span className="dot-live" /> LIVE
-          {updatedAt && <span className="live-age">{ago(new Date(updatedAt).toISOString())}</span>}
+        <div className="dash-updated" title="Umur data terakhir yang diambil dari server">
+          {updatedAt ? 'Diperbarui ' + ago(new Date(updatedAt).toISOString()) : 'Menyambungkan...'}
         </div>
       </header>
 
@@ -165,7 +193,9 @@ export default function Dashboard() {
         <div className="stat"><div className="num">{cAccounts}</div><div className="lbl">Total Akun</div></div>
         <div className="stat stat-hero"><div className="num ok">{cActive}</div><div className="lbl">Akun Aktif</div></div>
         <div className="stat"><div className={`num${cToday > 0 ? ' warn' : ''}`}>{cToday}</div><div className="lbl">Jadwal Hari Ini</div></div>
-        <div className={`stat${cErr > 0 ? ' stat-alert' : ''}`}><div className="num bad">{cErr}</div><div className="lbl">Error</div></div>
+        {cErr > 0
+          ? <Link className="stat stat-alert stat-link" to="/history?res=bad" title="Buka daftar error di Riwayat"><div className="num bad">{cErr}</div><div className="lbl">Error</div></Link>
+          : <div className="stat"><div className="num bad">{cErr}</div><div className="lbl">Error</div></div>}
       </section>
 
       <section className="plat-row">
@@ -174,15 +204,43 @@ export default function Dashboard() {
           const act = list.filter((a) => a.status === 'active').length;
           const pct = list.length ? Math.round((act / list.length) * 100) : 0;
           return (
-            <Link to={p.id === 'tiktok' ? '/tiktok' : `/akun?platform=${p.id}`} className={`card plat-${p.cls} plat-card`} key={p.id}
+            <Link to={list.length === 0 ? `/create-${p.id}` : (p.id === 'tiktok' ? '/tiktok' : `/akun?platform=${p.id}`)} className={`card plat-${p.cls} plat-card`} key={p.id}
               style={{ animationDelay: `${i * 90}ms` }}>
               <div className="plat-head"><span className="plat-ic">{p.icon}</span><h3>{p.name}</h3></div>
-              <div className="plat-num">{act}<span>/{list.length}</span></div>
-              <div className="plat-bar"><div style={{ width: pct + '%' }} /></div>
-              <div className="plat-sub">{pct}% aktif</div>
+              {list.length === 0 ? (
+                <div className="plat-empty">Belum ada akun {p.name}. Mulai dari Auto-Create.</div>
+              ) : (
+                <>
+                  <div className="plat-num">{act}<span>/{list.length}</span></div>
+                  <div className="plat-bar"><div style={{ width: pct + '%' }} /></div>
+                  <div className={`plat-sub${act > 0 && pct < 10 ? ' warn' : ''}`}>{pct}% aktif</div>
+                </>
+              )}
             </Link>
           );
         })}
+      </section>
+
+      <section className="card trend-card">
+        <div className="queue-head"><h3>Tren aktif 7 hari</h3><span className="feed-time">akun beraktivitas per hari, dari riwayat</span></div>
+        {trend === null ? <div className="loading">Memuat grafik...</div> : (() => {
+          // Hari yang tak ber-log tetap digambar kosong; hanya hari nyata angkanya.
+          const rows = new Map(trend.map((r) => [String(r.d).slice(0, 10), Number(r.c) || 0]));
+          const days = Array.from({ length: 7 }, (_, i) => new Date(Date.now() - (6 - i) * 86400000));
+          const fmt = (dt) => dt.toISOString().slice(0, 10);
+          const series = days.map((d) => ({ key: fmt(d), c: rows.get(fmt(d)) || 0, lbl: d.toLocaleDateString('id-ID', { weekday: 'short' }) }));
+          const max = Math.max(1, ...series.map((s) => s.c));
+          const total = series.reduce((a, s) => a + s.c, 0);
+          return total === 0 ? (
+            <p className="muted">Belum ada akun beraktivitas lewat 7 hari terakhir.</p>
+          ) : (
+            <div className="trend">
+              {series.map((s) => (
+                <div className="trend-day" key={s.key} title={`${s.c} akun beraktivitas`}><span className="trend-num">{s.c || ''}</span><div className="trend-bar" style={{ height: `${Math.round((s.c / max) * 64) + (s.c ? 4 : 2)}px` }} /><span className="trend-lbl">{s.lbl}</span></div>
+              ))}
+            </div>
+          );
+        })()}
       </section>
 
       <section className="dash-grid">
@@ -225,9 +283,10 @@ export default function Dashboard() {
         <div className="card">
           <div className="queue-head"><h3>Status Sistem</h3><span className="feed-time">{updatedAt ? 'data ' + ago(new Date(updatedAt).toISOString()).replace(' lalu', '') + ' lalu' : ''}</span></div>
           <ul className="sys2">
-            <li><span className="sys-ic">▦</span><span className="sys-label">Dashboard API</span><span className="badge b-done">nyala</span></li>
-            <li><span className="sys-ic">◷</span><span className="sys-label">Worker</span><span className={`badge ${workerHealthy > 0 ? 'b-done' : workers === null ? 'b-pending' : 'b-failed'}`}>{workerSummary}</span></li>
-            <li><span className="sys-ic">▣</span><span className="sys-label">Phone Farm</span><span className={`badge ${(farm?.length || 0) > 0 ? 'b-done' : 'b-pending'}`}>{farm?.length ? `${farm.length} HP` : '0 HP'}</span></li>
+            <li><span className="sys-ic">▦</span><span className="sys-label">Dashboard API</span><span className={`badge ${apiOk === null ? 'b-pending' : apiOk ? 'b-done' : 'b-failed'}`}>{apiOk === null ? 'memeriksa' : apiOk ? 'nyala' : 'gagal dihubungi'}</span></li>
+            <li><span className="sys-ic">◷</span><span className="sys-label">Worker</span><span className={`badge ${workerState === 'unknown' ? 'b-pending' : workerState === 'fail' ? 'b-failed' : workerHealthy > 0 ? 'b-done' : 'b-pending'}`}>{workerState === 'unknown' ? 'memeriksa' : workerState === 'fail' ? 'gagal dihubungi' : workerSummary}</span></li>
+            <li><span className="sys-ic">▣</span><span className="sys-label">Phone Farm</span><span className={`badge ${farmFail ? 'b-failed' : (farm?.length || 0) > 0 ? 'b-done' : 'b-pending'}`}>{farmFail ? 'gagal dihubungi' : farm?.length ? `${farm.length} HP` : '0 HP'}</span></li>
+            <li title={wd?.lastProbeAt ? 'Probe terakhir ' + ago(new Date(wd.lastProbeAt).toISOString()) : 'Probe tiap 10 menit'}><span className="sys-ic">⚑</span><span className="sys-label">Jaga Farm</span><span className={`badge ${wd === null ? 'b-pending' : wd.alarmed ? 'b-failed' : wd.fails > 0 ? 'b-pending' : 'b-done'}`}>{wd === null ? 'memeriksa' : wd.alarmed ? 'alarm terkirim' : wd.fails > 0 ? `gagal ${wd.fails}× (baru)` : 'jaga tiap 10 mnt'}</span></li>
           </ul>
           {farm?.length > 0 && <div className="feed-time" style={{ marginTop: 8 }}>{farm[0].model || farm[0].id}{farm[0].battery ? ` · batre ${farm[0].battery}%` : ''}</div>}
         </div>
@@ -236,7 +295,7 @@ export default function Dashboard() {
       <div className="card">
         <div className="queue-head"><h3>Aktivitas Terakhir</h3>{logs.length > 0 && <span className="queue-count live-count"><span className="dot-live sm" /> live</span>}</div>
         {logs.length === 0 ? (
-          <p className="muted">Belum ada aktivitas.</p>
+          <p className="muted">Tidak ada aktivitas baru lewat 48 jam terakhir. <Link to="/history">Lihat riwayat penuh</Link></p>
         ) : (
           <ul className="logs feed">
             {logs.map((l) => (

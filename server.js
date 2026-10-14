@@ -25,6 +25,7 @@ const FacebookAccountCreator = require('./src/fb-account-creator');
 const createRunner = require('./src/create-runner');
 const gmailRunner = require('./src/gmail-creator-runner');
 const farm = require('./src/adb-farm');
+const farmWatchdog = require('./src/farm-watchdog');
 const accountGate = require('./src/account-gate');
 const commentAutomation = require('./src/comment-automation');
 const dmAutomation = require('./src/dm-automation');
@@ -119,6 +120,14 @@ app.get('/api/stats', asyncH(async (req, res) => {
   res.json({ accounts, schedulesToday, postedToday, pending, logErrors });
 }));
 
+// Tren 7 hari: jumlah akun beraktivitas per hari apa pun hasilnya (posted/login/gagal),
+// dasar grafik Dashboard. Data kecil tak menjadi kendala: hanya hari ber-log yang terisi.
+app.get('/api/stats/trend', asyncH(async (req, res) => {
+  const rows = await db.rawAll(`SELECT date(created_at) AS d, COUNT(DISTINCT account_id) AS c
+    FROM post_log WHERE created_at >= date('now','-6 days') GROUP BY d`);
+  res.json(rows);
+}));
+
 // Daftar akun
 // Map { accountId: { ip, country, country_code, city, created_at } } — dipakai kolom "IP Terakhir".
 // HARUS terdaftar SEBELUM /api/accounts/:id supaya "ip-latest" tak tertelan param :id.
@@ -139,9 +148,16 @@ const FARM_SHOT_DIR = path.join(__dirname, 'public', 'farm');
 try { require('fs').mkdirSync(FARM_SHOT_DIR, { recursive: true }); } catch (e) { /* abaikan */ }
 
 app.get('/api/farm/devices', asyncH(async (req, res) => {
-  const devices = await farm.listDevices();
+  let devices;
+  try { devices = await farm.listDevices(); }
+  catch (e) { return res.status(503).json({ error: 'ADB tidak berjalan: ' + e.message.slice(0, 120) }); }
   const detailed = await Promise.all(devices.map((d) => farm.deviceInfo(d.id).catch(() => d)));
   res.json(detailed);
+}));
+
+// Status watchdog: episode gagal Phone Farm yang jadi bahan alarm notifikasi.
+app.get('/api/farm/watchdog', asyncH(async (req, res) => {
+  res.json(farmWatchdog.status());
 }));
 
 // Overview monitoring: device + state orkestra (idle/working/locked) + job terakhir
@@ -2297,6 +2313,7 @@ app.use((err, req, res, next) => {
 
 const PORT = Number(process.env.PORT) > 0 ? Number(process.env.PORT) : 3000; // PORT=0 dari env luar tak valid → fallback 3000
 db.load().then(() => {
+  farmWatchdog.start();
   server.listen(PORT, () => {
     console.log(`Dashboard: http://localhost:${PORT}`);
     console.log(`WebSocket: ws://localhost:${PORT}`);

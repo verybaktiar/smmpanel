@@ -1,4 +1,7 @@
-/* Dial: ENERGY 2 / RHYTHM 2 / MOTION 2. Count-up dan rise-in memandu mata ke metrik kunci (R-19). */
+/* Dial: ENERGY 2 / RHYTHM 2 / MOTION 2. Count-up angka dan rise-in kartu memandu mata ke metrik kunci;
+   keduanya one-shot saat mount, bukan loop, agar panel operasional terasa hidup tanpa mengganggu (R-19). */
+/* Sistem warna (R-29): ungu #494fdf = primer/aksi; teal-amber-merah = status ok/warn/bad;
+   biru-pink-cyan = identitas brand platform. Peran tidak dicampur; tipe status baru ikut kelompok yang ada. */
 /* Dashboard pilot — gelap premium + identitas platform */
 .dash { margin: 0 auto; padding: 28px 24px 60px; color: #fff; animation: rise .45s ease; width: 100%; }
 @keyframes rise { from { opacity: 0; transform: translateY(10px); } }
@@ -24,8 +27,9 @@
 .quick a:hover { background: #494fdf; border-color: #494fdf; transform: translateY(-1px); }
 .quick a.q-fb:hover { background: rgba(24,119,242,.25); border-color: #1877F2; }
 .quick a.q-ig:hover { background: rgba(221,42,123,.22); border-color: #DD2A7B; }
-.dash-live { font-size: 12px; font-weight: 700; letter-spacing: .1em; color: #2dd4a7; display: flex; gap: 8px; align-items: center; }
 .dot-live { width: 9px; height: 9px; border-radius: 50%; background: #00a87e; }
+/* D6: LIVE cukup di feed; hero hanya menampilkan umur data. */
+.dash-updated { font-size: 12px; color: #8d969e; white-space: nowrap; flex-shrink: 0; }
 .dash-error { background: rgba(226,59,74,.12); border: 1px solid #e23b4a; border-radius: 12px; padding: 12px 16px; margin-bottom: 16px; }
 /* .loading pindah ke ui.css (R-27, global). */
 .stat-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 18px; }
@@ -45,17 +49,29 @@
 .plat-ig .plat-ic { background: rgba(221,42,123,.18); color: #f06292; }
 .plat-tt .plat-ic { background: rgba(37,244,238,.12); color: #25F4EE; }
 .plat-num { font-size: 28px; font-weight: 600; } .plat-num span { color: #8d969e; font-size: 18px; }
-.plat-bar { height: 5px; background: rgba(255,255,255,.08); border-radius: 9999px; margin: 10px 0 8px; overflow: hidden; }
+/* D7: bar 7px + track lebih terang supaya status rendah tetap terbaca, bukan hilang di kartu. */
+.plat-bar { height: 7px; background: rgba(255,255,255,.12); border-radius: 9999px; margin: 10px 0 8px; overflow: hidden; }
 .plat-bar > div { height: 100%; border-radius: 9999px; transition: width 1s ease; }
 .plat-fb .plat-bar > div { background: #1877F2; }
 .plat-ig .plat-bar > div { background: linear-gradient(90deg, #F58529, #DD2A7B); }
 .plat-tt .plat-bar > div { background: #25F4EE; }
+/* Tren 7 hari: bar supel, hari kosong tetap digambar pendek (bukan hilang) supaya ritme hari terbaca. */
+.trend { display: flex; gap: 8px; align-items: flex-end; margin-top: 12px; }
+.trend-day { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 5px; }
+.trend-bar { width: 100%; max-width: 44px; background: linear-gradient(180deg, rgba(73,79,223,.95), rgba(73,79,223,.45)); border-radius: 6px 6px 2px 2px; }
+.trend-num { font-size: 11px; color: #c9cdd4; font-weight: 600; }
+.trend-lbl { font-size: 11px; color: #8d969e; }
+/* R-31: kartu platform adalah link satu-klik ke halaman platformnya (bukan kartu pasif),
+   sehingga perbandingan akun langsung berujung aksi. */
 .plat-card { text-decoration: none; color: inherit; display: block; animation: rise .5s ease backwards; transition: transform .18s, box-shadow .18s; }
 .plat-card:hover { transform: translateY(-3px); }
 .plat-fb.plat-card:hover { transform: translateY(-3px); }
 .plat-ig.plat-card:hover { transform: translateY(-3px); box-shadow: 0 12px 32px -12px rgba(221,42,123,.5); }
 .plat-tt.plat-card:hover { transform: translateY(-3px); }
 .stat { transition: transform .18s; } .stat:hover { transform: translateY(-2px); }
+/* D1: kartu Error bisa diklik ke Riwayat saat ada error (angka mati tidak boleh tanpa tindakan). */
+.stat-link { color: inherit; text-decoration: none; }
+.stat-link:hover .lbl { text-decoration: underline; }
 /* R-14: Akun Aktif adalah metrik operasi utama, border aksen menandainya. Error merah hanya saat > 0. */
 .stat-hero { border-color: rgba(73,79,223,.5); background: linear-gradient(180deg, rgba(73,79,223,.12), rgba(255,255,255,.015)); }
 .stat-alert { border-color: rgba(226,59,74,.45); }
@@ -78,7 +94,8 @@
 .queue-ic { width: 44px; height: 44px; stroke: #494fdf; fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; margin-bottom: 8px; }
 .queue-empty b { display: block; font-size: 14px; margin-bottom: 4px; }
 .queue-empty p { color: #8d969e; font-size: 12.5px; margin: 0 0 14px; }
-.btn-go { display: inline-block; background: #494fdf; color: #fff; text-decoration: none; border-radius: 9999px; padding: 10px 24px; font-size: 13px; font-weight: 600; }
+/* R-03: min-height 44px agar memenuhi tap target; inline-flex menjaga teks tetap di tengah. */
+.btn-go { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; background: #494fdf; color: #fff; text-decoration: none; border-radius: 9999px; padding: 10px 24px; font-size: 13px; font-weight: 600; }
 .btn-go:hover { opacity: .88; }
 .queue-list { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; }
 .queue-list li { display: flex; align-items: center; gap: 12px; padding: 11px 4px; border-bottom: 1px solid rgba(255,255,255,.05); font-size: 13px; }
@@ -101,13 +118,20 @@
 .feed-row b { min-width: 110px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .feed-row .feed-time { margin-left: auto; white-space: nowrap; }
 .plat-sub { color: #8d969e; font-size: 12px; margin-top: 2px; }
+.plat-sub.warn { color: #fbbf24; }
+/* D3: kartu platform tanpa akun jadi empty state dengan CTA, bukan bar kosong. */
+.plat-empty { color: #8d969e; font-size: 13px; line-height: 1.6; }
 .dash-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .dash-grid h3 { margin: 0 0 12px; font-size: 16px; }
 .sys, .logs { list-style: none; margin: 0; padding: 0; font-size: 13px; line-height: 2; }
 .sys .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; }
 .sys .dot.ok { background: #00a87e; } .sys .dot.warn { background: #ec7e00; }
 .logs span { color: #9aa0aa; } .muted { color: #8d969e; }
-@media (max-width: 720px) { .stat-row, .plat-row, .dash-grid { grid-template-columns: 1fr; } }
-/* R-03: di 360px pill LIVE + umur meluber 37px (flex-shrink:0). Umur disembunyikan di sini
-   karena kartu Status Sistem sudah menampilkan "data X dtk lalu"; titik LIVE tetap ada. */
-@media (max-width: 360px) { .dash-live .live-age { display: none; } }
+@media (max-width: 720px) {
+  .stat-row, .plat-row, .dash-grid { grid-template-columns: 1fr; }
+  /* D8: chip waktu menyempit supaya teks antrean butak ruang lebih di 320px. */
+  .time-chip { min-width: 72px; }
+  /* Umur data nowrap meluber di layar sempit: chip turun ke baris kedua hero. */
+  .hero-top { flex-wrap: wrap; }
+  .dash-updated { margin-left: 0; }
+}

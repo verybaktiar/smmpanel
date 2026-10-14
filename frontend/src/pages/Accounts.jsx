@@ -33,7 +33,12 @@ export default function Accounts() {
   const [showAdd, setShowAdd] = useState(false);
   const [statusTab, setStatusTab] = useState('active');
   const [form, setForm] = useState({ name: '', email: '', password: '', platform: 'fb' });
-  // Proxy/session ID per akun: modal edit (mask input, tidak tampil utuh di tabel).
+  // 2FA per akun: simpan kunci (paste) + lihat kode hidup (panel = Google Authenticator).
+  // GetQual: tiap 30 detik kode hangus — countdown lokal + refetch dari server.
+  const [totpEdit, setTotpEdit] = useState(null); // { acc, val, saving }
+  const [totpView, setTotpView] = useState(null); // { acc } — modal kode live
+  const [totpData, setTotpData] = useState(null); // { code, expires_in, period } | { error }
+  const [totpLeft, setTotpLeft] = useState(0);
   const [proxyEdit, setProxyEdit] = useState(null); // { acc, val }
   const [savingProxy, setSavingProxy] = useState(false);
   // Riwayat IP per akun: map { id: {ip, country, country_code, city, created_at} } + modal riwayat.
@@ -87,20 +92,22 @@ export default function Accounts() {
     return () => { live = false; };
   }, []);
   useEffect(() => { setPage(0); }, [platform, search, statusTab]);
-  // R-32: Escape menutup semua modal halaman ini (Tambah Akun, Proxy/Session, Riwayat IP),
-  // termasuk saat fokus berada di input di dalam modal.
-  const anyModalOpen = !!(showAdd || proxyEdit || ipHist.acc);
+  // R-32: Escape menutup semua modal halaman ini (Tambah Akun, Proxy/Session, Riwayat IP,
+  // 2FA), termasuk saat fokus berada di input di dalam modal.
+  const anyModalOpen = !!(showAdd || proxyEdit || ipHist.acc || totpEdit || totpView);
   useEffect(() => {
     if (!anyModalOpen) return;
     const esc = (e) => {
       if (e.key !== 'Escape') return;
       if (ipHist.acc) setIpHist({ acc: null, rows: null });
+      else if (totpView) closeTotpView();
+      else if (totpEdit) setTotpEdit(null);
       else if (proxyEdit) setProxyEdit(null);
       else setShowAdd(false);
     };
     window.addEventListener('keydown', esc);
     return () => window.removeEventListener('keydown', esc);
-  }, [anyModalOpen, proxyEdit, ipHist.acc]);
+  }, [anyModalOpen, proxyEdit, ipHist.acc, totpEdit, totpView]);
 
   const counts = useMemo(() => {
     let l = accounts || [];
@@ -224,6 +231,51 @@ export default function Accounts() {
     else { setShowAdd(false); setForm({ name: '', email: '', password: '', platform: 'fb' }); load(); }
   };
 
+  // ---- 2FA per akun (panel jadi Google Authenticator-nya) ----
+  const saveTotp = async (e) => {
+    e.preventDefault();
+    const v = (totpEdit.val || '').trim();
+    if (!v) { await alertDlg('Kunci masih kosong — paste teks kunci dari layar setup 2FA.', { title: 'Kunci kosong', danger: true, icon: '⚠' }); return; }
+    setTotpEdit((s) => ({ ...s, saving: true }));
+    try {
+      const res = await api(`/api/accounts/${totpEdit.acc.id}/totp`, { method: 'POST', body: JSON.stringify({ totpSecret: v }) });
+      if (res.error || res.kunci) {
+        await alertDlg(res.kunci || res.error || 'Gagal menyimpan kunci', { title: 'Kunci ditolak', danger: true, icon: '✗' });
+      } else {
+        toastOk(`Kunci 2FA ${totpEdit.acc.name} tersimpan — login berikutnya yang kena 2FA dijawab otomatis`);
+        setTotpEdit(null); load();
+      }
+    } finally { setTotpEdit((s) => (s ? { ...s, saving: false } : s)); }
+  };
+
+  const openTotpView = (acc) => { setTotpEdit(null); setTotpData(null); setTotpLeft(0); setTotpView({ acc }); };
+  const closeTotpView = () => { setTotpView(null); setTotpData(null); setTotpLeft(0); };
+
+  // Kode TOTP live: fetch saat modal buka + refetch tiap jendela hangus,
+  // countdown dihitung lokal di antara fetch (pola persis Gmail.jsx).
+  useEffect(() => {
+    if (!totpView) return undefined;
+    if (totpData && (totpData.error || totpLeft > 0)) return undefined;
+    let dead = false;
+    api(`/api/accounts/${totpView.acc.id}/totp`).then((r) => {
+      if (dead) return;
+      if (!r || r.error) { setTotpData({ error: (r && r.error) || 'gagal_hitung' }); return; }
+      setTotpData(r); setTotpLeft(r.expires_in || 30);
+    });
+    return () => { dead = true; };
+  }, [totpView, totpData, totpLeft]);
+  useEffect(() => {
+    if (!totpView || !totpData || totpData.error || totpLeft <= 0) return undefined;
+    const t = setTimeout(() => setTotpLeft(totpLeft - 1), 1000);
+    return () => clearTimeout(t);
+  }, [totpView, totpData, totpLeft]);
+
+  const copyCode = async () => {
+    if (!totpData || !totpData.code) return;
+    try { await navigator.clipboard.writeText(totpData.code); toastOk('Kode disalin'); }
+    catch (e) { toastErr('Gagal menyalin — salin manual'); }
+  };
+
   // Simpan proxy akun (format host:port:user:pass). DataImpulse otomatis dapat
   // sticky session __sid.<nama-akun> saat browser dibuka, jadi IP konsisten antar sesi.
   const saveProxy = async (e) => {
@@ -236,8 +288,23 @@ export default function Accounts() {
     setSavingProxy(true);
     try {
       const res = await api(`/api/accounts/${proxyEdit.acc.id}/proxy`, { method: 'PUT', body: JSON.stringify({ proxy: v || null }) });
-      if (res.error) await alertDlg(res.error, { title: 'Gagal menyimpan', danger: true, icon: '✗' });
-      else { toastOk(v ? 'Proxy akun tersimpan' : 'Proxy akun dihapus'); setProxyEdit(null); load(); }
+      if (res.error) {
+        await alertDlg(res.error, { title: 'Gagal menyimpan', danger: true, icon: '✗' });
+      } else if (!v) {
+        toastOk('Proxy akun dihapus'); setProxyEdit(null); load();
+      } else if (res.probe && res.probe.error) {
+        toastErr(`Proxy tersimpan, tapi probe gagal: ${res.probe.error}`, 8000);
+        setProxyEdit(null); load();
+      } else if (res.probe && res.probe.ip) {
+        // P3: server sudah auto-probe + sync fingerprint geo (timezone/locale dari IP).
+        const g = res.geo || {};
+        const cc = String(res.probe.country_code || '').toUpperCase();
+        const loc = [res.probe.city, cc].filter(Boolean).join(', ');
+        const geoTxt = g.timezone ? ` | fingerprint geo: ${g.timezone}${g.locale ? ` / ${g.locale}` : ''}` : '';
+        if (cc && cc !== 'ID') toastErr(`Proxy tersimpan. IP ${res.probe.ip} keluar Indonesia (${loc}). Cek proxy/DI_COUNTRY${geoTxt}`, 9000);
+        else toastOk(`Proxy tersimpan. IP ${res.probe.ip}${loc ? ` (${loc})` : ''}${geoTxt}`, 8000);
+        setProxyEdit(null); load();
+      } else { toastOk('Proxy akun tersimpan'); setProxyEdit(null); load(); }
     } catch (err) {
       await alertDlg(String(err.message || err), { title: 'Gagal menyimpan', danger: true, icon: '✗' });
     } finally { setSavingProxy(false); }
@@ -332,7 +399,7 @@ export default function Accounts() {
 
       <div className="card table-wrap">
         <table className="tbl">
-          <thead><tr><th>Akun</th>{platform === 'all' && <th>Platform</th>}<th>Status</th><th>Kesehatan</th><th>Proxy / Session</th><th>IP Terakhir</th><th>Login Terakhir</th><th>Aksi</th></tr></thead>
+          <thead><tr><th>Akun</th>{platform === 'all' && <th>Platform</th>}<th>Status</th><th>Kesehatan</th><th>Proxy / Session</th><th>IP Terakhir</th><th className="col-hide-sm">Login Terakhir</th><th>Aksi</th></tr></thead>
           <tbody>
             {rows.map((a) => (
               <tr key={a.id} className={a.status === 'active' ? '' : 'row-dead'}>
@@ -367,6 +434,15 @@ export default function Accounts() {
                   >
                     {a.proxy ? `🔗 ${String(a.proxy).split(':')[0]}` : '＋ Proxy'}
                   </button>
+                  {a.platform === 'ig' && (
+                    <button
+                      className={`pill ${a.has_totp ? 'p-done' : 'p-wait'}`}
+                      title={a.has_totp ? 'Kunci 2FA tersimpan — klik untuk lihat kode live (panel yang menghitung)' : 'Klik untuk paste kunci 2FA (dari layar setup autentikator)'}
+                      onClick={() => (a.has_totp ? openTotpView(a) : setTotpEdit({ acc: a, val: '', saving: false }))}
+                    >
+                      {a.has_totp ? '🔐 2FA' : '＋ 2FA'}
+                    </button>
+                  )}
                 </td>
                 <td>
                   {(() => {
@@ -387,14 +463,18 @@ export default function Accounts() {
                    );
                   })()}
                 </td>
-                <td className="muted">{a.last_login ? new Date(a.last_login).toLocaleString('id-ID') : '–'}</td>
+                <td className="muted col-hide-sm">{a.last_login ? new Date(a.last_login).toLocaleString('id-ID') : '–'}</td>
                 <td>
                   <div className="act-col">
-                    {a.status === 'active'
-                      ? <button disabled={busy === a.id} onClick={() => act(a.id, () => api(`/api/accounts/${a.id}/open`, { method: 'POST' }), 'Buka browser')}>{busy === a.id && <span className="btn-spin" />}{busy === a.id ? 'Membuka…' : 'Buka'}</button>
-                      : <button className="btn-primary" disabled={busy === a.id} onClick={() => act(a.id, () => api(`/api/accounts/${a.id}/login`, { method: 'POST' }), 'Login')}>{busy === a.id && <span className="btn-spin" />}{busy === a.id ? 'Login…' : 'Login'}</button>}
-                    <button className="btn-primary" disabled={busy === a.id} onClick={() => activateViaLogin(a)}>{busy === a.id && <span className="btn-spin" />}{busy === a.id ? 'Aktivasi…' : 'Aktivasi via login'}</button>
-                    <button className="btn-danger-ghost" onClick={() => act(a.id, () => api(`/api/accounts/${a.id}`, { method: 'DELETE' }), 'Hapus')}>Hapus</button>
+                    <div>
+                      {a.status === 'active'
+                        ? <button className="act-open" disabled={busy === a.id} onClick={() => act(a.id, () => api(`/api/accounts/${a.id}/open`, { method: 'POST' }), 'Buka browser')}>{busy === a.id ? <><span className="btn-spin" />Membuka…</> : 'Buka'}</button>
+                        : <button className="act-login" disabled={busy === a.id} onClick={() => act(a.id, () => api(`/api/accounts/${a.id}/login`, { method: 'POST' }), 'Login')}>{busy === a.id ? <><span className="btn-spin" />Login…</> : 'Login'}</button>}
+                      <button className="act-activate" disabled={busy === a.id} onClick={() => activateViaLogin(a)}>{busy === a.id ? <><span className="btn-spin" />Aktivasi…</> : 'Aktivasi via login'}</button>
+                    </div>
+                    <button className="act-del" aria-label="Hapus akun" title="Hapus akun" disabled={busy === a.id} onClick={() => act(a.id, () => api(`/api/accounts/${a.id}`, { method: 'DELETE' }), 'Hapus')}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                    </button>
                   </div>
                 </td>
               </tr>
@@ -488,6 +568,54 @@ export default function Accounts() {
               <button type="submit" className="btn-primary" disabled={savingProxy}>{savingProxy ? 'Menyimpan…' : 'Simpan'}</button>
             </div>
           </form>
+        </div>
+      )}
+
+      {totpEdit && (
+        <div className="overlay" onClick={() => setTotpEdit(null)}>
+          <form className="modal" role="dialog" aria-modal="true" aria-label="Kunci 2FA akun" onClick={(e) => e.stopPropagation()} onSubmit={saveTotp}>
+            <h3>Kunci 2FA: {totpEdit.acc.name}</h3>
+            <p className="modal-hint">
+              Paste <b>teks kunci</b> dari layar setup 2FA IG (pendek "Salin kuncinya"), contoh
+              bentuknya <code>GPT7 DQ5H EBCA 2EWL</code>. Kunci disimpan terenkripsi; kode 6 digit
+              dihitung panel sendiri — login berikutnya yang kena 2FA dijawab otomatis tanpa HP.
+            </p>
+            <label>Kunci autentikator
+              <input
+                className="inp"
+                placeholder="GPT7 DQ5H EBCA 2EWL atau otpauth://..."
+                value={totpEdit.val}
+                onChange={(e) => setTotpEdit({ ...totpEdit, val: e.target.value })}
+                spellCheck={false}
+                autoComplete="off"
+              />
+            </label>
+            <div className="modal-btns">
+              <button type="button" className="btn-ghost" onClick={() => setTotpEdit(null)}>Batal</button>
+              <button type="submit" className="btn-primary" disabled={totpEdit.saving}>{totpEdit.saving ? 'Menyimpan…' : 'Simpan kunci'}</button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {totpView && (
+        <div className="overlay" onClick={(e) => { if (e.target === e.currentTarget) closeTotpView(); }}>
+          <div className="modal" role="dialog" aria-modal="true" aria-label={`Kode 2FA ${totpView.acc.name}`} onClick={(e) => e.stopPropagation()}>
+            <h3>Kode 2FA: {totpView.acc.name}</h3>
+            {!totpData && <p className="modal-hint">Menghitung kode...</p>}
+            {totpData && totpData.error && <p className="modal-hint">{totpData.error === 'tanpa_totp' ? 'Kunci belum tersimpan.' : totpData.error === 'totp_locked' ? '2FA dipegang pihak lain — bot tidak boleh menghitung.' : totpData.error === 'secret_rusak' ? 'Kunci tersimpan tidak bisa dibaca.' : 'Gagal menghitung kode.'}</p>}
+            {totpData && !totpData.error && (
+              <>
+                <div className="g2fa-code" aria-live="polite">{totpData.code}</div>
+                <div className="g2fa-bar"><span style={{ width: `${Math.max(0, (totpLeft / (totpData.period || 30)) * 100)}%` }} /></div>
+                <p className="modal-hint">Kode baru dalam {totpLeft} detik. Panel yang menghitung — HP/Authenticator tidak diperlukan.</p>
+              </>
+            )}
+            <div className="modal-btns">
+              <button type="button" className="btn-ghost" onClick={copyCode} disabled={!totpData || !totpData.code}>Salin kode</button>
+              <button type="button" className="btn-primary" onClick={closeTotpView}>Tutup</button>
+            </div>
+          </div>
         </div>
       )}
 
