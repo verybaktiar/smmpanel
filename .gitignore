@@ -66,3 +66,5 @@ farm-jobs/
 tmp/
 server.pid
 tools/superagent/
+# Repo kerja backup terenkripsi (dikelola scripts/backup-github.js)
+.backup-repo/
