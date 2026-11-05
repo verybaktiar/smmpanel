@@ -29,6 +29,7 @@ const createRunner = require('./src/create-runner');
 const gmailRunner = require('./src/gmail-creator-runner');
 const farm = require('./src/adb-farm');
 const farmWatchdog = require('./src/farm-watchdog');
+const backupWatchdog = require('./src/backup-watchdog');
 const accountGate = require('./src/account-gate');
 const commentAutomation = require('./src/comment-automation');
 const dmAutomation = require('./src/dm-automation');
@@ -257,6 +258,11 @@ app.post('/api/create/ig/room-probe', asyncH(async (req, res) => {
 // Status watchdog: episode gagal Phone Farm yang jadi bahan alarm notifikasi.
 app.get('/api/farm/watchdog', asyncH(async (req, res) => {
   res.json(farmWatchdog.status());
+}));
+
+// Status backup harian: kapan snapshot terakhir ter-push dan apakah sudah lewat batas.
+app.get('/api/backup/status', asyncH(async (req, res) => {
+  res.json(backupWatchdog.status());
 }));
 
 // Overview monitoring: device + state orkestra (idle/working/locked) + job terakhir
@@ -3649,6 +3655,7 @@ app.use((err, req, res, next) => {
 const PORT = Number(process.env.PORT) > 0 ? Number(process.env.PORT) : 3000; // PORT=0 dari env luar tak valid → fallback 3000
 db.load().then(() => {
   farmWatchdog.start();
+  backupWatchdog.start();
   // Cek biner adb saat start: kalau yang terpasang rusak (mis. adb bawaan scrcpy
   // yang crash), Phone Farm tampak "tanpa HP" tanpa penjelasan. Tulis di log.
   farm.diagnose().then((rows) => {

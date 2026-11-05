@@ -27,6 +27,7 @@ const SIMPAN = 14; // snapshot harian yang disimpan sebelum yang tertua dibuang
 const FILE_DB = path.join(ROOT, 'database.db');
 const DIR_JOBS = path.join(ROOT, 'farm-jobs');
 const LOG = path.join(ROOT, '.tmp-logs', 'backup-github.log');
+const STATUS = path.join(ROOT, '.tmp-logs', 'backup-status.json');
 const MAGIC = 'SMMBAK1';
 
 function log(pesan) {
@@ -63,6 +64,14 @@ function bundel() {
     farmJobs: jobs,
   };
   return { isi, jumlahJob: Object.keys(jobs).length };
+}
+
+// Dicatat setelah push benar-benar sukses, supaya watchdog tidak menganggap
+// backup aman padahal hanya file lokal yang tertulis.
+function catatStatus(nama, jumlahJob, ukuranKB) {
+  const isi = { terakhirSukses: new Date().toISOString(), snapshot: nama, jumlahJob, ukuranKB };
+  fs.mkdirSync(path.dirname(STATUS), { recursive: true });
+  fs.writeFileSync(STATUS, JSON.stringify(isi, null, 2));
 }
 
 function enkripsi(buffer) {
@@ -135,7 +144,10 @@ function jalankanBackup() {
     // Pengaman: jangan pernah push apa pun selain ciphertext.
     throw new Error(`ada file non-.enc di stage (${bukanEnkripsi.join(', ')}) — push dibatalkan`);
   }
+  const ukuranKB = Math.round(fs.statSync(tujuan).size / 1024);
   if (!diStage.length) {
+    // Snapshot hari ini sudah ada di remote: data tetap aman, status boleh dicatat.
+    catatStatus(nama, jumlahJob, ukuranKB);
     log('tidak ada perubahan, tidak ada yang di-push');
     return;
   }
@@ -157,8 +169,8 @@ function jalankanBackup() {
   }
   if (terakhir) throw terakhir;
 
-  const ukuran = (fs.statSync(tujuan).size / 1024).toFixed(0);
-  log(`OK ${nama} — ${ukuran} KB terenkripsi, ${jumlahJob} job, branch ${BRANCH} ter-push`);
+  catatStatus(nama, jumlahJob, ukuranKB);
+  log(`OK ${nama} — ${ukuranKB} KB terenkripsi, ${jumlahJob} job, branch ${BRANCH} ter-push`);
 }
 
 function pulihkan(file, timpa) {
