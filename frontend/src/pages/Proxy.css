@@ -1,12 +1,25 @@
 /* R-31: kredensial proxy disamarkan di daftar; hasil tes inline agar cepat nilai banyak proxy. */
 .px-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.px-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.px-head h3 { margin: 0; }
+.px-test-all { min-width: 132px; }
 .px-val { font-size: 12.5px; color: #c9c9cd; background: rgba(0,0,0,.3); padding: 4px 10px; border-radius: 8px; }
+.px-label { font-size: 11.5px; color: #9aa0aa; margin-top: 5px; }
+.px-label:first-letter { text-transform: uppercase; }
 .px-test { padding: 6px 14px; font-size: 12px; }
 .px-ok { color: #4ade80; font-size: 12px; margin-left: 8px; }
 .p-ok { color: #4ade80; border-color: rgba(74,222,128,.35); background: rgba(74,222,128,.08); }
 .p-bad { color: #ff7a86; border-color: rgba(226,59,74,.4); background: rgba(226,59,74,.08); }
 .p-wait { color: #fbbf24; border-color: rgba(251,191,36,.35); background: rgba(251,191,36,.08); }
 .px-bad { color: #ff7a86; font-size: 12px; margin-left: 8px; }
+/* Penolakan karena IP belum diizinkan: proxy hidup, cuma butuh didaftarkan. */
+.px-warn { color: #fbbf24; font-size: 12px; margin-left: 8px; }
 .farm-msg { font-size: 13px; margin: 0 0 12px; padding: 10px 14px; border-radius: 12px; }
 .farm-msg.ok { color: #4ade80; background: rgba(74,222,128,.08); border: 1px solid rgba(74,222,128,.3); }
 .farm-msg.bad { color: #ff7a86; background: rgba(226,59,74,.08); border: 1px solid rgba(226,59,74,.35); }
+.farm-msg.warn { color: #fbbf24; background: rgba(251,191,36,.07); border: 1px solid rgba(251,191,36,.3); }
+
+@media (max-width: 520px) {
+  .px-head { align-items: stretch; }
+  .px-test-all { width: 100%; }
+}

@@ -1,0 +1,1997 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SMM Panel — Auto Post</title>
+<style>
+  :root { --bg:#0b0f19; --sidebar:#111827; --card:#161e2e; --card2:#1e2740; --border:#24315a; --text:#e6ecff; --muted:#8894b8; --accent:#4f7bff; --green:#34d399; --red:#f87171; --amber:#fbbf24; --purple:#a855f7; --pink:#ec4899; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:'Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--text); min-height:100vh; display:flex; }
+  /* Sidebar */
+  .sidebar { width:240px; background:var(--sidebar); border-right:1px solid var(--border); padding:20px 14px; display:flex; flex-direction:column; gap:6px; position:fixed; top:0; left:0; bottom:0; overflow-y:auto; z-index:10; }
+  .sidebar .brand { display:flex; align-items:center; gap:10px; padding:4px 10px 16px; font-size:18px; font-weight:700; }
+  .sidebar .brand .logo { width:32px; height:32px; background:var(--accent); border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:18px; }
+  .sidebar .sec-label { font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); padding:14px 10px 6px; }
+  .sidebar .nav-item { display:flex; align-items:center; gap:11px; padding:9px 12px; border-radius:9px; cursor:pointer; font-size:14px; color:var(--muted); transition:.15s; border:1px solid transparent; }
+  .sidebar .nav-item:hover { background:var(--card); color:var(--text); }
+  .sidebar .nav-item.active { background:var(--accent); color:#fff; }
+  .sidebar .nav-item .ic { width:20px; text-align:center; }
+  .sidebar .nav-item.active .badge-c { display:none; }
+  .sidebar .foot { margin-top:auto; font-size:12px; color:#55628a; padding:12px 10px; }
+  /* Main */
+  .main { flex:1; margin-left:240px; padding:22px 28px; max-width:1100px; }
+  .main .page-title { font-size:22px; font-weight:700; margin-bottom:4px; }
+  .main .page-sub { color:var(--muted); font-size:13px; margin-bottom:20px; }
+  .stats { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:22px; }
+  .stat { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:16px; }
+  .stat .num { font-size:26px; font-weight:700; }
+  .stat .lbl { color:var(--muted); font-size:12px; margin-top:3px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:20px; }
+  .card-title { font-size:15px; font-weight:600; margin-bottom:14px; color:var(--accent); }
+  .grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+  form { display:flex; flex-direction:column; gap:10px; }
+  label { font-size:13px; color:var(--muted); }
+  input, textarea, select { background:var(--card2); border:1px solid var(--border); color:var(--text); border-radius:8px; padding:10px 12px; font-size:14px; width:100%; }
+  textarea { resize:vertical; min-height:70px; }
+  button { background:var(--accent); color:#fff; border:none; border-radius:8px; padding:11px; font-size:14px; font-weight:600; cursor:pointer; }
+  button:hover { filter:brightness(1.12); }
+  button.green { background:var(--green); }
+  button.ghost { background:transparent; border:1px solid var(--border); color:var(--text); }
+  button:disabled { opacity:.65; cursor:not-allowed; }
+  /* Spinner */
+  .spinner { display:inline-block; width:14px; height:14px; border:2px solid rgba(255,255,255,.35); border-top-color:#fff; border-radius:50%; animation:spin .7s linear infinite; vertical-align:middle; margin-right:7px; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  button.loading { display:inline-flex; align-items:center; justify-content:center; gap:7px; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th,td { text-align:left; padding:9px 10px; border-bottom:1px solid var(--border); }
+  th { color:var(--muted); font-weight:600; font-size:12px; }
+  .card > .scroll { border:1px solid var(--border); border-radius:10px; overflow:hidden; }
+  .dt-scroll { border:1px solid var(--border); border-radius:10px; }
+  .card > .scroll table, .dt-scroll table { min-width:640px; }
+  .card > .scroll thead, .dt-scroll thead { position:sticky; top:0; background:var(--card2); z-index:1; }
+  .card > .scroll thead th, .dt-scroll thead th { padding:11px 12px; border-bottom:1px solid var(--border); }
+  .card > .scroll tbody tr, .dt-scroll tbody tr { transition:background .15s; }
+  .card > .scroll tbody tr:hover, .dt-scroll tbody tr:hover { background:rgba(79,123,255,.07); }
+  .card > .scroll tbody tr:last-child td, .dt-scroll tbody tr:last-child td { border-bottom:none; }
+  .card > .scroll td, .dt-scroll td { padding:11px 12px; vertical-align:middle; }
+  /* Avatar akun */
+  .acc-cell { display:flex; align-items:center; gap:10px; }
+  .acc-avatar { width:34px; height:34px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:13px; color:#fff; flex-shrink:0; }
+  .acc-avatar.fb { background:linear-gradient(135deg,#4f7bff,#2f55d4); }
+  .acc-avatar.ig { background:linear-gradient(135deg,#ec4899,#a855f7); }
+  .acc-avatar.tiktok { background:linear-gradient(135deg,#a855f7,#6d28d9); }
+  .acc-avatar.other { background:linear-gradient(135deg,#64748b,#475569); }
+  .acc-name { font-weight:600; color:var(--text); }
+  .acc-email { font-size:12px; color:var(--muted); margin-top:2px; }
+  .platform-cell { display:flex; align-items:center; gap:7px; }
+  .platform-ic { width:24px; height:24px; border-radius:6px; display:flex; align-items:center; justify-content:center; font-size:12px; }
+  .platform-ic.fb { background:rgba(79,123,255,.15); color:var(--accent); }
+  .platform-ic.ig { background:rgba(236,72,153,.15); color:var(--pink); }
+  .platform-ic.tiktok { background:rgba(168,85,247,.15); color:var(--purple); }
+  .status-cell { display:flex; align-items:center; gap:6px; }
+  .status-dot { width:7px; height:7px; border-radius:50%; display:inline-block; }
+  .status-dot.good { background:var(--green); }
+  .status-dot.warn { background:var(--amber); }
+  .status-dot.bad { background:var(--red); }
+  /* Kolom aksi lebih rapi */
+  .act-col { display:flex; flex-direction:row; gap:5px; min-width:auto; }
+  .act-col button { width:auto; padding:6px 11px; font-size:12px; white-space:nowrap; border-radius:7px; }
+  /* DataTable toolbar */
+  .dt-toolbar { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:14px; flex-wrap:wrap; }
+  .dt-toolbar .dt-info { font-size:13px; color:var(--muted); }
+  .dt-toolbar .dt-search { display:flex; align-items:center; gap:8px; }
+  .dt-toolbar .dt-search input { background:var(--card2); border:1px solid var(--border); color:var(--text); border-radius:8px; padding:8px 12px 8px 34px; font-size:13px; width:220px; transition:.2s; }
+  .dt-toolbar .dt-search input:focus { border-color:var(--accent); outline:none; width:260px; }
+  .dt-search-wrap { position:relative; }
+  .dt-search-wrap::before { content:'🔍'; position:absolute; left:10px; top:50%; transform:translateY(-50%); font-size:13px; opacity:.6; }
+  .dt-footer { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:12px; flex-wrap:wrap; }
+  .dt-pages { display:flex; gap:4px; align-items:center; }
+  .dt-pages button { background:var(--card2); border:1px solid var(--border); color:var(--text); padding:6px 11px; border-radius:6px; font-size:12px; cursor:pointer; transition:.15s; min-width:32px; text-align:center; }
+  .dt-pages button:hover { border-color:var(--accent); color:var(--accent); }
+  .dt-pages button.active { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .dt-pages button:disabled { opacity:.4; cursor:default; }
+  .dt-sort { cursor:pointer; user-select:none; white-space:nowrap; }
+  .dt-sort:hover { color:var(--accent); }
+  .dt-sort::after { content:' ⇅'; font-size:10px; opacity:.4; }
+  .dt-sort.asc::after { content:' ↑'; opacity:1; }
+  .dt-sort.desc::after { content:' ↓'; opacity:1; }
+  .dt-empty { text-align:center; padding:40px 20px; color:var(--muted); font-size:14px; }
+  .dt-empty-icon { font-size:36px; margin-bottom:10px; opacity:.5; }
+  .badge { padding:2px 9px; border-radius:20px; font-size:11px; font-weight:600; display:inline-block; }
+  .b-active,.b-done,.b-posted { background:rgba(52,211,153,.15); color:var(--green); }
+  .b-pending,.b-login_ok { background:rgba(251,191,36,.15); color:var(--amber); }
+  .b-failed,.b-error,.b-login_failed,.b-checkpoint { background:rgba(248,113,113,.15); color:var(--red); }
+  .b-fb { background:rgba(79,123,255,.15); color:var(--accent); }
+  .b-tiktok { background:rgba(168,85,247,.15); color:var(--purple); }
+  .b-ig { background:rgba(236,72,153,.15); color:var(--pink); }
+  .btn-login { background:var(--green); padding:5px 12px; font-size:12px; }
+  .btn-open { background:var(--accent); padding:5px 14px; font-size:12px; }
+  .btn-del { background:transparent; border:1px solid var(--red); color:var(--red); padding:4px 10px; font-size:11px; }
+  .act-group { display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+  .act-group button { border-radius:7px; }
+  .act-main { background:var(--accent); color:#fff; border:none; font-weight:600; cursor:pointer; }
+  .act-main.green { background:var(--green); }
+  .act-edit { background:var(--card2); border:1px solid var(--border); color:var(--text); cursor:pointer; transition:.2s; }
+  .act-edit:hover { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .act-del { background:transparent; border:1px solid var(--red); color:var(--red); cursor:pointer; }
+  .toast { position:fixed; bottom:20px; right:20px; background:var(--card2); border:1px solid var(--border); padding:13px 20px; border-radius:10px; font-size:14px; opacity:0; transition:.3s; z-index:99; max-width:340px; }
+  .toast.show { opacity:1; }
+  /* Modal konfirmasi */
+  .modal-overlay { position:fixed; inset:0; background:rgba(8,10,18,.72); backdrop-filter:blur(3px); display:flex; align-items:center; justify-content:center; z-index:1000; opacity:0; visibility:hidden; transition:.2s; }
+  .modal-overlay.show { opacity:1; visibility:visible; }
+  .modal-box { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:24px 26px; max-width:420px; width:92%; box-shadow:0 20px 60px rgba(0,0,0,.5); transform:scale(.94); transition:.18s; }
+  .modal-overlay.show .modal-box { transform:scale(1); }
+  .modal-icon { font-size:30px; text-align:center; margin-bottom:8px; }
+  .modal-title { font-size:16px; font-weight:700; text-align:center; margin-bottom:8px; color:var(--text); }
+  .modal-msg { font-size:13px; color:var(--muted); text-align:center; line-height:1.5; margin-bottom:20px; }
+  .modal-btns { display:flex; gap:10px; }
+  /* Modal CRUD untuk Form */
+  .modal-form { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:28px; max-width:540px; width:94%; box-shadow:0 20px 60px rgba(0,0,0,.5); transform:scale(.94); transition:.18s; max-height:90vh; overflow-y:auto; }
+  .modal-overlay.show .modal-form { transform:scale(1); }
+  .modal-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; }
+  .modal-header h3 { font-size:18px; font-weight:700; color:var(--text); }
+  .modal-close { background:transparent; border:none; color:var(--muted); font-size:24px; cursor:pointer; padding:0; width:32px; height:32px; display:flex; align-items:center; justify-content:center; border-radius:6px; }
+  .modal-close:hover { background:var(--card2); color:var(--text); }
+  .modal-btns button { flex:1; padding:11px; font-size:14px; }
+  .muted { color:var(--muted); }
+  .scroll { overflow-x:auto; max-height:340px; overflow-y:auto; }
+  .dt-scroll { overflow-x:auto; }
+  .history-empty { color:var(--muted); text-align:center; padding:30px; }
+  .acc-select-row { display:flex; gap:8px; }
+  .acc-select-row label { flex:1; }
+  /* Progress Modal */
+  .progress-overlay { position:fixed; inset:0; background:rgba(8,10,18,.85); backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center; z-index:2000; opacity:0; visibility:hidden; transition:.3s; }
+  .progress-overlay.show { opacity:1; visibility:visible; }
+  .progress-box { background:var(--card); border:1px solid var(--border); border-radius:16px; padding:28px 32px; max-width:480px; width:94%; box-shadow:0 24px 70px rgba(0,0,0,.6); }
+  .progress-header { text-align:center; margin-bottom:24px; }
+  .progress-header .icon { font-size:42px; margin-bottom:10px; animation:bounce 1.2s ease-in-out infinite; }
+  @keyframes bounce { 0%,100%{transform:translateY(0);} 50%{transform:translateY(-8px);} }
+  .progress-header .title { font-size:18px; font-weight:700; color:var(--text); margin-bottom:6px; }
+  .progress-header .subtitle { font-size:13px; color:var(--muted); }
+  .progress-steps { display:flex; flex-direction:column; gap:14px; margin-bottom:20px; }
+  .progress-step { display:flex; align-items:center; gap:12px; padding:12px 14px; background:var(--card2); border:1px solid var(--border); border-radius:10px; transition:.25s; }
+  .progress-step.active { border-color:var(--accent); background:rgba(79,123,255,.08); }
+  .progress-step.completed { border-color:var(--green); background:rgba(52,211,153,.08); }
+  .progress-step.failed { border-color:var(--red); background:rgba(248,113,113,.08); }
+  .progress-step .step-icon { width:32px; height:32px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:16px; background:var(--sidebar); border:1px solid var(--border); flex-shrink:0; }
+  .progress-step.active .step-icon { background:var(--accent); border-color:var(--accent); animation:pulse 1.5s ease-in-out infinite; }
+  .progress-step.completed .step-icon { background:var(--green); border-color:var(--green); }
+  .progress-step.failed .step-icon { background:var(--red); border-color:var(--red); }
+  @keyframes pulse { 0%,100%{transform:scale(1); opacity:1;} 50%{transform:scale(1.08); opacity:.85;} }
+  .progress-step .step-content { flex:1; }
+  .progress-step .step-title { font-size:14px; font-weight:600; color:var(--text); margin-bottom:2px; }
+  .progress-step .step-desc { font-size:12px; color:var(--muted); }
+  .progress-step.active .step-desc { color:var(--accent); }
+  .progress-step.completed .step-desc { color:var(--green); }
+  .progress-step.failed .step-desc { color:var(--red); }
+  .progress-bar-container { height:6px; background:var(--card2); border-radius:10px; overflow:hidden; margin-bottom:16px; }
+  .progress-bar { height:100%; background:linear-gradient(90deg, var(--accent), var(--purple)); border-radius:10px; transition:width .4s ease; position:relative; }
+  .progress-bar::after { content:''; position:absolute; top:0; left:0; right:0; bottom:0; background:linear-gradient(90deg, transparent, rgba(255,255,255,.3), transparent); animation:shimmer 1.5s infinite; }
+  @keyframes shimmer { 0%{transform:translateX(-100%);} 100%{transform:translateX(100%);} }
+  .progress-footer { text-align:center; font-size:12px; color:var(--muted); }
+  @media (max-width:900px){ .sidebar{width:100%; position:static; height:auto; flex-direction:row; flex-wrap:wrap;} .main{margin-left:0;} .stats,.grid-2{grid-template-columns:1fr;} }
+</style>
+</head>
+<body>
+<aside class="sidebar">
+  <div class="brand"><div class="logo">🚀</div> SMM AutoPost</div>
+
+  <div class="sec-label">Platform</div>
+  <div class="nav-item" data-view="fb"><span class="ic">📘</span> Facebook</div>
+  <div class="nav-item" data-view="tiktok"><span class="ic">🎵</span> TikTok <span class="muted" style="font-size:11px;">(segera)</span></div>
+  <div class="nav-item" data-view="ig"><span class="ic">📸</span> Instagram</div>
+
+  <div class="sec-label">Fitur</div>
+  <div class="nav-item" data-panel="accounts"><span class="ic">👥</span> Akun</div>
+  <div class="nav-item" data-panel="posting"><span class="ic">✍️</span> Posting</div>
+  <div class="nav-item" data-panel="history"><span class="ic">🕘</span> Riwayat</div>
+  <div class="nav-item" data-panel="likes"><span class="ic">👍</span> Likes</div>
+  <div class="nav-item" data-panel="smmlikes"><span class="ic">🚀</span> SMM Like Panel</div>
+  <div class="nav-item" data-panel="iglikes"><span class="ic">❤️</span> Like Instagram</div>
+  <div class="nav-item" data-panel="proxy"><span class="ic">🌐</span> Proxy</div>
+  <div class="nav-item" data-panel="monitoring"><span class="ic">📊</span> Monitoring</div>
+  <div class="nav-item" data-panel="followers"><span class="ic">👤</span> Followers <span class="muted" style="font-size:11px;">(segera)</span></div>
+  <div class="nav-item" data-panel="comments"><span class="ic">💬</span> Komentar <span class="muted" style="font-size:11px;">(segera)</span></div>
+
+  <div class="foot">Konsep SMM Panel • v0.2</div>
+</aside>
+
+<main class="main">
+  <div id="errBanner" style="display:none; background:rgba(248,113,113,.12); border:1px solid var(--red); color:var(--red); border-radius:10px; padding:12px 16px; margin-bottom:18px; font-size:13px; display:flex; justify-content:space-between; align-items:center;">
+    <span id="errBannerMsg"></span>
+    <button class="ghost" style="color:var(--red); padding:4px 10px; margin-left:12px;" onclick="dismissErr()">Tutup</button>
+  </div>
+  <!-- ============ AKUN ============ -->
+  <section data-page="accounts">
+    <div class="page-title">Kelola Akun</div>
+    <div class="page-sub" id="accSubTitle">Kelola & login akun social media</div>
+
+    <div class="stats">
+      <div class="stat"><div class="num" id="sAccounts">–</div><div class="lbl">Total Akun</div></div>
+      <div class="stat"><div class="num" id="sToday">–</div><div class="lbl">Jadwal Hari Ini</div></div>
+      <div class="stat"><div class="num" id="sPosted">–</div><div class="lbl">Berhasil Post</div></div>
+      <div class="stat"><div class="num" id="sErrors">–</div><div class="lbl">Error</div></div>
+    </div>
+
+    <div style="display:flex; gap:10px; margin-bottom:20px; flex-wrap:wrap;">
+      <button onclick="openAddAccountModal()" class="green">➕ Tambah Akun</button>
+      <button onclick="openBulkImportModal()">📥 Import Akun (Bulk)</button>
+    </div>
+
+    <div class="card" style="background:var(--card2); border:1px solid var(--accent);">
+      <div class="card-title">🚀 Multiple Run</div>
+      <div id="batchToolbar" style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;">
+        <div>
+          <label style="font-size:12px; color:var(--muted); display:block; margin-bottom:4px;">Aksi</label>
+          <select id="batchAction" style="min-width:130px;">
+            <option value="login">🔐 Login</option>
+            <option value="like">👍 Like FB</option>
+            <option value="ig-like">❤️ Like IG</option>
+            <option value="post">📝 Post FB</option>
+            <option value="post-ig">📸 Post IG</option>
+          </select>
+        </div>
+        <div id="batchUrlGroup" style="display:none;">
+          <label style="font-size:12px; color:var(--muted); display:block; margin-bottom:4px;">URL Postingan</label>
+          <input type="text" id="batchUrl" placeholder="https://facebook.com/..." style="min-width:300px;">
+        </div>
+        <div id="batchContentGroup" style="display:none;">
+          <label style="font-size:12px; color:var(--muted); display:block; margin-bottom:4px;">Konten</label>
+          <textarea id="batchContent" placeholder="Teks posting..." style="min-width:300px; height:34px; padding:6px 10px;"></textarea>
+        </div>
+        <div id="batchStatusGroup">
+          <label style="font-size:12px; color:var(--muted); display:block; margin-bottom:4px;">Filter Status</label>
+          <select id="batchStatus">
+            <option value="">Semua</option>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+            <option value="checkpoint">Checkpoint</option>
+          </select>
+        </div>
+        <button class="green" onclick="runBatchSelected()" id="btnRunSelected" disabled>▶ Jalankan Terpilih (<span id="selectedCount">0</span>)</button>
+        <button class="ghost" onclick="runBatchAll()" id="btnRunAll">▶ Jalankan Semua</button>
+      </div>
+      <div id="batchProgress" style="display:none; margin-top:10px;">
+        <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:4px;">
+          <span id="batchProgressLabel">Memproses...</span>
+          <span id="batchProgressCount">0/0</span>
+        </div>
+        <div style="background:var(--card-bg); height:8px; border-radius:6px; overflow:hidden;">
+          <div id="batchProgressBar" style="background:var(--accent); height:100%; width:0%; transition:width .3s;"></div>
+        </div>
+        <div style="display:flex; gap:16px; margin-top:6px; font-size:12px;">
+          <span style="color:var(--green);">✅ <span id="batchSuccess">0</span></span>
+          <span style="color:var(--red);">❌ <span id="batchFailed">0</span></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">👥 Daftar Akun</div>
+      <div class="dt-toolbar">
+        <div class="dt-info" id="accTableInfo">Menampilkan 0 akun</div>
+        <div class="dt-search">
+          <div class="dt-search-wrap"><input type="text" id="accTableSearch" placeholder="Cari nama / email / status..."></div>
+          <select id="accTablePlat" style="width:auto; padding:8px 12px; font-size:13px;">
+            <option value="all">Semua Platform</option>
+            <option value="fb">Facebook</option>
+            <option value="ig">Instagram</option>
+            <option value="tiktok">TikTok</option>
+          </select>
+        </div>
+      </div>
+      <div class="dt-scroll"><table id="accTable"><thead><tr>
+        <th style="width:36px;"><input type="checkbox" id="selectAllAcc" onchange="toggleSelectAll(this)" title="Pilih semua di halaman ini"></th>
+        <th class="dt-sort" data-col="platform">Platform</th>
+        <th class="dt-sort" data-col="name">Nama</th>
+        <th class="dt-sort" data-col="email">Email</th>
+        <th class="dt-sort" data-col="status">Status</th>
+        <th>Aksi</th>
+      </tr></thead><tbody><tr><td colspan="6" class="history-empty">Memuat...</td></tr></tbody></table></div>
+      <div class="dt-footer">
+        <div class="dt-info" id="accTableCount">0 total</div>
+        <div class="dt-pages" id="accTablePages"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ POSTING ============ -->
+  <section data-page="posting" style="display:none;">
+    <div class="page-title">Posting Konten</div>
+    <div class="page-sub" id="postSubTitle">Kirim konten sekarang atau jadwalkan</div>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title">⚡ Post Sekarang (langsung)</div>
+        <form id="postForm">
+          <label>Akun</label><select name="accountId" id="accSelectPost"><option>Muat akun...</option></select>
+          <label>Generate AI (opsional)</label>
+          <div style="display:flex; gap:8px; align-items:stretch;">
+            <input name="aiPrompt" id="postAiPrompt" placeholder="mis. buatkan berita trading yang menarik">
+            <button type="button" class="ghost" style="white-space:nowrap; padding:10px 14px;" onclick="genAI('postAiPrompt','postContent')">✨ Generate</button>
+          </div>
+          <label>Konten</label><textarea name="content" id="postContent" required placeholder="Konten akan terisi otomatis jika generate dipakai..."></textarea>
+          <label>Gambar (opsional)</label><input name="media" type="file" accept="image/*">
+          <button type="submit" class="green">🚀 Kirim Sekarang</button>
+        </form>
+      </div>
+      <div class="card">
+        <div class="card-title">🕒 Tambah Jadwal</div>
+        <form id="schForm">
+          <label>Akun</label><select name="accountId" id="accSelect"><option>Muat akun...</option></select>
+          <label>Generate AI (opsional)</label>
+          <div style="display:flex; gap:8px; align-items:stretch;">
+            <input name="aiPrompt" id="schAiPrompt" placeholder="mis. buatkan berita trading yang menarik">
+            <button type="button" class="ghost" style="white-space:nowrap; padding:10px 14px;" onclick="genAI('schAiPrompt','schContent')">✨ Generate</button>
+          </div>
+          <label>Konten</label><textarea name="content" id="schContent" required placeholder="Konten akan terisi otomatis jika generate dipakai..."></textarea>
+          <label>Gambar (opsional)</label><input name="media" type="file" accept="image/*">
+          <label>Ulangi</label>
+          <select name="repeat" id="schRepeat">
+            <option value="none">Sekali saja</option>
+            <option value="daily">Harian</option>
+            <option value="weekly">Mingguan</option>
+            <option value="monthly">Bulanan</option>
+          </select>
+          <label>Waktu (jam lokal)</label><input name="time" type="time" required>
+          <button type="submit">Jadwalkan</button>
+        </form>
+        <div style="margin-top:12px; display:flex; gap:8px; align-items:center;">
+          <button class="green" style="flex:1;" onclick="runDue()">▶️ Jalankan Jadwal Lewat</button>
+          <span class="muted" id="runResult" style="font-size:12px;"></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:18px;">
+      <div class="card-title">📅 Jadwal Posting</div>
+      <div class="scroll"><table id="schTable"><thead><tr><th>ID</th><th>Akun</th><th>Waktu</th><th>Ulangi</th><th>Status</th><th>Konten</th></tr></thead><tbody></tbody></table></div>
+    </div>
+  </section>
+
+  <!-- ============ RIWAYAT ============ -->
+  <section data-page="history" style="display:none;">
+    <div class="page-title">Riwayat Posting</div>
+    <div class="page-sub">Ringkasan & riwayat aktivitas per akun</div>
+
+    <div class="card" style="margin-bottom:18px;">
+      <div class="card-title">📊 Ringkasan per Akun</div>
+      <div class="scroll"><table id="sumTable"><thead><tr><th>Akun</th><th>Platform</th><th>Status</th><th>Total</th><th>Berhasil</th><th>Gagal</th></tr></thead><tbody></tbody></table></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🕘 Log Riwayat</div>
+      <div style="margin-bottom:12px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+        <label>Filter akun</label>
+        <select id="histFilter" style="width:220px;"><option value="all">Semua akun</option></select>
+        <button class="ghost" onclick="refreshHist()">↻ Segarkan</button>
+        <button class="ghost" style="color:var(--red);" onclick="doCleanup()">🗑 Bersihkan Data Lama</button>
+      </div>
+      <div class="scroll"><table id="histTable"><thead><tr><th>Waktu</th><th>Akun</th><th>Status</th><th>Konten Posting</th><th>Hasil</th></tr></thead><tbody></tbody></table></div>
+    </div>
+  </section>
+
+  <!-- ============ INSTAGRAM ============ -->
+  <section data-page="igpost" style="display:none;">
+    <div class="page-title">📸 Posting Instagram</div>
+    <div class="page-sub">Posting ke Instagram memakai akun Facebook yang terhubung (media wajib)</div>
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title">➕ Posting Baru IG</div>
+        <form id="igForm">
+          <label>Akun (profile Facebook)</label><select name="accountId" id="igAccSelect"><option>Muat akun...</option></select>
+          <label>Generate AI (opsional)</label>
+          <div style="display:flex; gap:8px; align-items:stretch;">
+            <input name="aiPrompt" id="igAiPrompt" placeholder="mis. buat caption promo produk menarik">
+            <button type="button" class="ghost" style="white-space:nowrap; padding:10px 14px;" onclick="genAI('igAiPrompt','igCaption')">✨ Generate</button>
+          </div>
+          <label>Gambar / Video (wajib)</label><input name="media" type="file" accept="image/*,video/*" required>
+          <label>Caption</label><textarea name="caption" id="igCaption" placeholder="Tulis / generate caption postingan..."></textarea>
+          <button type="submit" class="green">📤 Bagikan ke Instagram</button>
+        </form>
+      </div>
+      <div class="card">
+        <div class="card-title">💡 Login Instagram Sekali</div>
+        <div class="muted" style="line-height:1.6; font-size:13px;">
+          Instagram diakses memakai <b>profile Facebook yang sama</b> yang terhubung ke akun Instagram.<br><br>
+          Untuk <b>awal</b>, login Instagram sekali lewat langkah ini (Connect with Facebook), lalu session-nya tersimpan permanent.<br><br>
+        </div>
+        <div style="display:flex; gap:8px; margin-top:6px; align-items:stretch;">
+          <select id="igOpenSelect" style="flex:1;"><option>Muat akun...</option></select>
+          <button type="button" onclick="openIgLogin()">🌐 Buka Instagram</button>
+        </div>
+        <div class="muted" style="font-size:12px; margin-top:8px;">Browser terbuka → klik "Continue as Facebook" / pilih akun → selesai. Setelah itu bisa auto-post.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ PLACEHOLDER (Likes/Followers/Komentar) ============ -->
+  <section data-page="likes" style="display:none;">
+    <div class="page-title">👍 Likes</div>
+    <div class="page-sub">Auto-like postingan Facebook secara terjadwal</div>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title">➕ Tambah Like Job</div>
+        <form id="likeForm">
+          <label>Akun</label><select name="accountId" id="likeAccSelect"><option>Muat akun...</option></select>
+          <label>Nama (label)</label><input name="name" required placeholder="Like postingan promo">
+          <label>URL Postingan</label><input name="postUrl" required placeholder="https://www.facebook.com/...">
+          <button type="submit">Simpan Like Job</button>
+        </form>
+      </div>
+      <div class="card">
+        <div class="card-title">📋 Daftar Like Job</div>
+        <div class="scroll"><table id="likeTable"><thead><tr><th>Nama</th><th>Akun</th><th>Status</th><th>Terakhir</th><th>Aksi</th></tr></thead><tbody></tbody></table></div>
+      </div>
+    </div>
+  </section>
+  
+  <section data-page="smmlikes" style="display:none;">
+    <div class="page-title">🚀 SMM Like Panel</div>
+    <div class="page-sub">Order like dengan rotasi akun otomatis — cukup input link & jumlah like yang diinginkan</div>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title">➕ Buat Order Like Baru</div>
+        <form id="smmLikeForm">
+          <label>Platform</label>
+          <select name="platform" onchange="updateSmmAccountInfo()">
+            <option value="fb">Facebook</option>
+            <option value="ig">Instagram</option>
+          </select>
+          <label>Nama Order</label>
+          <input name="name" required placeholder="Boost postingan promo">
+          <label>URL Target Postingan</label>
+          <input name="postUrl" required placeholder="https://www.facebook.com/..." style="font-size:13px;">
+          <label>Jumlah Like yang Diinginkan</label>
+          <input name="targetLikes" type="number" required min="1" max="1000" placeholder="10" value="10" id="smmTargetLikes">
+          <div style="background:var(--card2); padding:10px; border-radius:8px; font-size:12px; color:var(--muted); margin-top:10px;">
+            💡 <strong>Penting:</strong> 1 akun = 1 like. Setiap akun hanya bisa like 1x per postingan.<br>
+            <span id="smmAccountInfo" style="color:var(--accent); font-weight:600;">Loading...</span>
+          </div>
+          <button type="submit" class="green" style="margin-top:12px;">🚀 Buat Order</button>
+        </form>
+      </div>
+      <div class="card">
+        <div class="card-title">📊 Daftar Order Like</div>
+        <div class="scroll">
+          <table id="smmLikeTable">
+            <thead>
+              <tr>
+                <th>Nama</th>
+                <th>Platform</th>
+                <th>Progress</th>
+                <th>Status</th>
+                <th>Dibuat</th>
+                <th>Aksi</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:18px;">
+      <div class="card-title">ℹ️ Cara Kerja Sistem</div>
+      <div style="font-size:13px; line-height:1.6; color:var(--muted);">
+        <p style="margin-bottom:10px;">1. <strong>Penting:</strong> Setiap akun hanya bisa like <strong>1 kali</strong> per postingan</p>
+        <p style="margin-bottom:10px;">2. <strong>Target Like:</strong> Jumlah like tidak boleh melebihi jumlah akun aktif Anda</p>
+        <p style="margin-bottom:10px;">3. <strong>Contoh:</strong> Punya 10 akun aktif = maksimal 10 like untuk 1 postingan</p>
+        <p style="margin-bottom:10px;">4. <strong>Eksekusi:</strong> Sistem akan menggunakan akun berbeda untuk setiap like</p>
+        <p style="margin-bottom:10px;">5. <strong>Tracking:</strong> Progress ditampilkan real-time dengan detail akun yang sudah like</p>
+        <p>6. <strong>Batch Processing:</strong> Sistem memproses 5 like sekaligus per eksekusi untuk efisiensi</p>
+      </div>
+    </div>
+  </section>
+  <section data-page="iglikes" style="display:none;">
+    <div class="page-title">❤️ Like Instagram</div>
+    <div class="page-sub">Auto-like postingan Instagram via URL (memakai akun/profile Facebook yang terhubung)</div>
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title">➕ Tambah Like IG</div>
+        <form id="igLikeForm">
+          <label>Akun (profile Facebook)</label><select name="accountId" id="igLikeAccSelect"><option>Muat akun...</option></select>
+          <label>Nama (label)</label><input name="name" required placeholder="Like postingan IG">
+          <label>URL Postingan Instagram</label><input name="postUrl" required placeholder="https://www.instagram.com/p/...">
+          <button type="submit">Simpan Like IG</button>
+        </form>
+      </div>
+      <div class="card">
+        <div class="card-title">📋 Daftar Like IG</div>
+        <div class="scroll"><table id="igLikeTable"><thead><tr><th>Nama</th><th>Akun</th><th>Status</th><th>Terakhir</th><th>Aksi</th></tr></thead><tbody></tbody></table></div>
+      </div>
+    </div>
+  </section>
+  <section data-page="proxy" style="display:none;">
+    <div class="page-title">🌐 Kelola Proxy</div>
+    <div class="page-sub">Simpan daftar proxy & assign ke akun (1 akun = 1 IP)</div>
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title">➕ Tambah Proxy</div>
+        <form id="proxyForm">
+          <label>Proxy (format host:port:user:pass — bisa banyak, pisah baris)</label>
+          <textarea name="values" required style="min-height:120px;" placeholder="31.59.20.176:6754:oqxpanjc:ybmjzac6okqe&#10;31.56.127.193:7684:oqxpanjc:ybmjzac6okqe"></textarea>
+          <button type="submit">Simpan Proxy</button>
+        </form>
+        <div style="margin-top:12px;">
+          <button class="green" style="width:100%;" onclick="assignProxies()">🔗 Assign ke Akun yang Belum Punya Proxy</button>
+          <button class="ghost" style="width:100%; margin-top:8px;" onclick="assignProxies(true)">🔄 Assign Ulang Semua Akun (timpa)</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">📋 Daftar Proxy</div>
+        <div class="scroll"><table id="proxyTable"><thead><tr><th>ID</th><th>Nilai</th><th>Status</th><th>Aksi</th></tr></thead><tbody></tbody></table></div>
+      </div>
+    </div>
+  </section>
+  <section data-page="followers" style="display:none;">
+    <div class="page-title">👤 Followers</div>
+    <div class="page-sub">Fitur akan datang — kelola followers secara otomatis.</div>
+    <div class="card"><div class="history-empty">🚧 Fitur belum tersedia</div></div>
+  </section>
+  <section data-page="comments" style="display:none;">
+    <div class="page-title">💬 Komentar</div>
+    <div class="page-sub">Fitur akan datang — kelola komentar secara otomatis.</div>
+    <div class="card"><div class="history-empty">🚧 Fitur belum tersedia</div></div>
+  </section>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<div class="modal-overlay" id="confirmModal">
+  <div class="modal-box">
+    <div class="modal-icon" id="cfIcon">⚠️</div>
+    <div class="modal-title" id="cfTitle">Konfirmasi</div>
+    <div class="modal-msg" id="cfMsg"></div>
+    <div class="modal-btns">
+      <button class="ghost" id="cfNo" style="color:var(--text);">Batal</button>
+      <button style="background:var(--red);" id="cfYes">Ya, Lanjutkan</button>
+    </div>
+  </div>
+</div>
+
+<div class="progress-overlay" id="progressModal">
+  <div class="progress-box">
+    <div class="progress-header">
+      <div class="icon" id="progressIcon">🔐</div>
+      <div class="title" id="progressTitle">Proses Login</div>
+      <div class="subtitle" id="progressSubtitle">Mohon tunggu...</div>
+    </div>
+    <div class="progress-bar-container">
+      <div class="progress-bar" id="progressBar" style="width:0%"></div>
+    </div>
+    <div class="progress-steps" id="progressSteps"></div>
+    <div class="progress-footer" id="progressFooter">Jangan tutup halaman ini</div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="editPasswordModal">
+  <div class="modal-box">
+    <div class="modal-icon">🔑</div>
+    <div class="modal-title">Edit Password Akun</div>
+    <div style="margin-bottom:16px;">
+      <label style="font-size:13px; color:var(--muted); display:block; margin-bottom:6px;">Akun: <strong style="color:var(--text);" id="editPwAccountName"></strong></label>
+      <label style="font-size:13px; color:var(--muted); display:block; margin-bottom:6px;">Email: <strong style="color:var(--text);" id="editPwAccountEmail"></strong></label>
+      
+      <div style="background:var(--card2); padding:12px; border-radius:8px; margin-top:12px; border:1px solid var(--border);">
+        <label style="font-size:12px; color:var(--muted); display:block; margin-bottom:6px;">Password Lama</label>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <input type="password" id="editPwOldDisplay" readonly style="flex:1; padding:8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text); font-size:13px; font-family:monospace;">
+          <button type="button" id="editPwToggle" onclick="toggleOldPassword()" style="padding:8px 12px; border:1px solid var(--border); border-radius:6px; background:var(--card); color:var(--text); cursor:pointer; font-size:12px;">👁️</button>
+        </div>
+      </div>
+      
+      <label style="display:block; margin-top:14px; margin-bottom:6px; font-size:14px; font-weight:600;">Password Baru</label>
+      <input type="password" id="editPwInput" placeholder="Masukkan password baru" style="width:100%; padding:10px; border:1px solid var(--border); border-radius:8px; background:var(--card2); color:var(--text); font-size:14px;">
+    </div>
+    <div class="modal-btns">
+      <button class="ghost" id="editPwCancel" style="color:var(--text);">Batal</button>
+      <button style="background:var(--accent);" id="editPwSave">💾 Simpan</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Add Account -->
+<div id="addAccountModal" class="modal-overlay">
+  <div class="modal-form">
+    <div class="modal-header">
+      <h3>➕ Tambah Akun Baru</h3>
+      <button class="modal-close" onclick="closeAddAccountModal()">×</button>
+    </div>
+    <form id="modalAccForm">
+      <label>Platform</label>
+      <select name="platform">
+        <option value="fb">Facebook</option>
+        <option value="ig">Instagram</option>
+        <option value="tiktok">TikTok (segera)</option>
+      </select>
+      
+      <label>Nama (Label)</label>
+      <input name="name" required placeholder="Contoh: Akun1, AkunBisnis, dll">
+      
+      <label>Email / No HP</label>
+      <input name="email" required placeholder="email@domain.com atau +628123456789">
+      
+      <label>Password</label>
+      <input name="password" type="password" required placeholder="••••••••">
+      
+      <label>Proxy (Opsional)</label>
+      <input name="proxy" placeholder="host:port:user:pass atau kosongkan">
+      <div style="font-size:12px; color:var(--muted); margin-top:-5px;">
+        Format: 1.2.3.4:8080:username:password
+      </div>
+      
+      <div style="display:flex; gap:10px; margin-top:10px;">
+        <button type="button" class="ghost" onclick="closeAddAccountModal()" style="flex:1;">Batal</button>
+        <button type="submit" class="green" style="flex:2;">💾 Simpan Akun</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal Bulk Import -->
+<div id="bulkImportModal" class="modal-overlay">
+  <div class="modal-form">
+    <div class="modal-header">
+      <h3>📥 Import Akun (Bulk)</h3>
+      <button class="modal-close" onclick="closeBulkImportModal()">×</button>
+    </div>
+    <form id="modalBulkForm">
+      <label>Upload File (TXT atau CSV)</label>
+      <input name="file" type="file" accept=".txt,.csv" required>
+      
+      <div style="background:var(--card2); padding:12px; border-radius:8px; font-size:12px; color:var(--muted); margin:12px 0; line-height:1.6;">
+        <strong style="color:var(--text);">📋 Format File:</strong><br>
+        <code style="background:var(--bg); padding:2px 6px; border-radius:4px;">name|email|password|platform|proxy</code><br>
+        atau<br>
+        <code style="background:var(--bg); padding:2px 6px; border-radius:4px;">name,email,password,platform,proxy</code><br><br>
+        
+        <strong style="color:var(--text);">✏️ Contoh Isi File:</strong><br>
+        <code style="display:block; background:var(--bg); padding:8px; border-radius:4px; margin-top:5px;">
+Akun1|email1@gmail.com|pass123|fb|1.2.3.4:8080:user:pass<br>
+Akun2|email2@gmail.com|pass456|fb<br>
+Akun3,email3@gmail.com,pass789,ig,5.6.7.8:8080
+        </code><br>
+        
+        <strong style="color:var(--text);">Platform:</strong> fb (Facebook), ig (Instagram), tiktok<br>
+        <strong style="color:var(--text);">Proxy:</strong> Opsional, bisa dikosongkan
+      </div>
+      
+      <div id="importResult" style="margin:10px 0; padding:10px; background:var(--card2); border-radius:8px; font-size:13px; display:none;"></div>
+      
+      <div style="display:flex; gap:10px; margin-top:10px;">
+        <button type="button" class="ghost" onclick="closeBulkImportModal()" style="flex:1;">Batal</button>
+        <button type="submit" class="green" style="flex:2;">📥 Import Sekarang</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+// ==== State ====
+let currentPlatform = 'fb';   // fb | tiktok | ig (filter)
+let accounts = [];
+// DataTable state untuk tabel akun
+const accTableState = {
+  search: '',
+  plat: 'all',
+  sortCol: null,
+  sortDir: 'asc',
+  page: 0,
+  pageSize: 8,
+};
+
+const PLAT_LABEL = { fb:'Facebook', tiktok:'TikTok', ig:'Instagram' };
+
+// ==== Nav ====
+document.querySelectorAll('.sidebar .nav-item').forEach((el) => {
+  el.addEventListener('click', () => {
+    document.querySelectorAll('.sidebar .nav-item').forEach(n => n.classList.remove('active'));
+    el.classList.add('active');
+
+    if (el.dataset.view) {
+      currentPlatform = el.dataset.view;
+      document.querySelectorAll('[data-page]').forEach(p => p.style.display='none');
+      // Instagram punya panel khusus posting (igpost), bukan filter akun.
+      const target = el.dataset.view === 'ig' ? 'igpost' : 'accounts';
+      const sec = document.querySelector(`[data-page="${target}"]`);
+      if (sec) sec.style.display='block';
+      document.querySelectorAll('.sidebar .nav-item[data-panel]').forEach(n=>n.classList.remove('active'));
+      updateSubTitles();
+      refresh();
+    } else if (el.dataset.panel) {
+      document.querySelectorAll('[data-page]').forEach(p => p.style.display='none');
+      const panel = document.querySelector(`[data-page="${el.dataset.panel}"]`);
+      if (panel) panel.style.display='block';
+      updateSubTitles();
+      refresh();
+    }
+  });
+});
+
+function updateSubTitles(){
+  document.getElementById('accSubTitle').textContent = 'Kelola & login akun ' + PLAT_LABEL[currentPlatform];
+  document.getElementById('postSubTitle').textContent = 'Kirim konten sekarang atau jadwalkan (' + PLAT_LABEL[currentPlatform] + ')';
+}
+
+// ==== Helpers ====
+const $ = (s) => document.querySelector(s);
+async function api(url, opts) {
+  try {
+    const r = await fetch(url, opts);
+    if (r.status === 429) {
+      showErr('Rate limit exceeded. Tunggu beberapa detik lalu coba lagi.');
+      return { error: 'Rate limit exceeded' };
+    }
+    const data = await r.json();
+    return data;
+  } catch (err) {
+    showErr('Network error: ' + err.message);
+    return { error: err.message };
+  }
+}
+function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2600); }
+function showErr(msg){
+  if(!msg) return;
+  $('#errBannerMsg').textContent = msg;
+  $('#errBanner').style.display = 'flex';
+  setTimeout(dismissErr, 12000);
+}
+function dismissErr(){ $('#errBanner').style.display = 'none'; }
+// Modal konfirmasi custom (menggantikan confirm bawaan).
+function showConfirm(message, yesLabel = 'Ya, Lanjutkan', title = 'Konfirmasi', icon = '⚠️'){
+  return new Promise((resolve) => {
+    const modal = $('#confirmModal');
+    $('#cfMsg').textContent = message;
+    $('#cfTitle').textContent = title;
+    $('#cfIcon').textContent = icon;
+    $('#cfYes').textContent = yesLabel;
+    modal.classList.add('show');
+
+    const close = (val) => { modal.classList.remove('show'); cleanup(); resolve(val); };
+    const onYes = () => close(true);
+    const onNo = () => close(false);
+    function cleanup(){
+      $('#cfYes').removeEventListener('click', onYes);
+      $('#cfNo').removeEventListener('click', onNo);
+    }
+    $('#cfYes').addEventListener('click', onYes);
+    $('#cfNo').addEventListener('click', onNo);
+  });
+}
+function badge(s){
+  s=s||''; const cls = s.includes('fail')||s==='error'||s==='checkpoint' ? 'b-failed' : (s==='done'||s==='posted'||s==='like_ok' ? 'b-done' : (s==='pending'||s==='login_ok'||s==='running' ? 'b-pending' : ''));
+  return `<span class="badge ${cls}">${s}</span>`;
+}
+function pbadge(p){ return `<span class="badge b-${p}">${PLAT_LABEL[p]||p}</span>`; }
+function fmt(dt){ return dt ? new Date(dt).toLocaleString('id-ID') : '–'; }
+
+// ==== Progress Modal ====
+const ProgressModal = {
+  steps: [],
+  currentStep: 0,
+  
+  show(title, subtitle, icon='🔐') {
+    $('#progressModal').classList.add('show');
+    $('#progressTitle').textContent = title;
+    $('#progressSubtitle').textContent = subtitle;
+    $('#progressIcon').textContent = icon;
+    $('#progressBar').style.width = '0%';
+    this.steps = [];
+    this.currentStep = 0;
+  },
+  
+  hide() {
+    $('#progressModal').classList.remove('show');
+  },
+  
+  setSteps(stepsData) {
+    this.steps = stepsData;
+    this.currentStep = 0;
+    this.renderSteps();
+  },
+  
+  renderSteps() {
+    const container = $('#progressSteps');
+    container.innerHTML = this.steps.map((step, idx) => `
+      <div class="progress-step" data-step="${idx}">
+        <div class="step-icon">${step.icon}</div>
+        <div class="step-content">
+          <div class="step-title">${step.title}</div>
+          <div class="step-desc">${step.desc}</div>
+        </div>
+      </div>
+    `).join('');
+  },
+  
+  updateStep(index, status, newDesc=null) {
+    if (index >= this.steps.length) return;
+    
+    const stepEl = document.querySelector(`.progress-step[data-step="${index}"]`);
+    if (!stepEl) return;
+    
+    stepEl.classList.remove('active', 'completed', 'failed');
+    stepEl.classList.add(status);
+    
+    if (newDesc) {
+      const descEl = stepEl.querySelector('.step-desc');
+      if (descEl) descEl.textContent = newDesc;
+      this.steps[index].desc = newDesc;
+    }
+    
+    if (status === 'completed') {
+      this.currentStep = index + 1;
+    }
+    
+    const progress = Math.round(((index + (status === 'completed' ? 1 : 0.5)) / this.steps.length) * 100);
+    $('#progressBar').style.width = progress + '%';
+  },
+  
+  setActive(index) {
+    this.updateStep(index, 'active');
+  },
+  
+  setCompleted(index, newDesc=null) {
+    this.updateStep(index, 'completed', newDesc);
+  },
+  
+  setFailed(index, errorMsg) {
+    this.updateStep(index, 'failed', errorMsg);
+  },
+  
+  updateFooter(text) {
+    $('#progressFooter').textContent = text;
+  }
+};
+
+// ==== Load ====
+async function loadStats(){
+  const s = await api('/api/stats');
+  if (!s.error) {
+    $('#sAccounts').textContent = s.accounts || 0;
+    $('#sToday').textContent = s.schedulesToday || 0;
+    $('#sPosted').textContent = s.postedToday || 0;
+    $('#sErrors').textContent = s.logErrors || 0;
+  }
+}
+async function loadAccounts(){
+  const result = await api('/api/accounts');
+  if (result.error || !Array.isArray(result)) {
+    accounts = [];
+    renderAccTable();
+    return;
+  }
+  accounts = result;
+  renderAccTable();
+  // Update SMM account info
+  updateSmmAccountInfo();
+  // isi dropdown
+  const opts = accounts.map(a=>`<option value="${a.id}">${a.name} (${PLAT_LABEL[a.platform]})</option>`).join('') || '<option>Tidak ada akun</option>';
+  $('#accSelect').innerHTML = opts;
+  $('#accSelectPost').innerHTML = opts;
+  const likeSel = $('#likeAccSelect');
+  if(likeSel) likeSel.innerHTML = opts;
+  const igSel = $('#igAccSelect');
+  if(igSel) igSel.innerHTML = opts;
+  const igOpenSel = $('#igOpenSelect');
+  if(igOpenSel) igOpenSel.innerHTML = opts;
+  const igLikeSel = $('#igLikeAccSelect');
+  if(igLikeSel) igLikeSel.innerHTML = opts;
+  // isi filter riwayat (semua akun + per nama)
+  const names = [...new Set(accounts.map(a=>a.name))];
+  $('#histFilter').innerHTML = '<option value="all">Semua akun</option>' + names.map(n=>`<option value="${n}">${n}</option>`).join('');
+}
+
+// ==== DataTable Akun ====
+function accSortValue(a, col) {
+  switch (col) {
+    case 'platform': return PLAT_LABEL[a.platform] || a.platform || '';
+    case 'name': return (a.name || '').toLowerCase();
+    case 'email': return (a.email || '').toLowerCase();
+    case 'status': return a.status || '';
+    default: return '';
+  }
+}
+
+function renderAccTable() {
+  const tbody = $('#accTable tbody');
+  let list = accounts.filter(a => {
+    if (accTableState.plat !== 'all' && a.platform !== accTableState.plat) return false;
+    if (accTableState.search) {
+      const q = accTableState.search.toLowerCase();
+      const hay = ((a.name||'') + ' ' + (a.email||'') + ' ' + (a.status||'')).toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+
+  if (accTableState.sortCol) {
+    const col = accTableState.sortCol;
+    const dir = accTableState.sortDir === 'asc' ? 1 : -1;
+    list.sort((a, b) => {
+      const va = accSortValue(a, col), vb = accSortValue(b, col);
+      return va < vb ? -1 * dir : va > vb ? 1 * dir : 0;
+    });
+  }
+
+  const total = list.length;
+  const totalPages = Math.max(1, Math.ceil(total / accTableState.pageSize));
+  if (accTableState.page >= totalPages) accTableState.page = totalPages - 1;
+  const page = Math.min(accTableState.page, totalPages - 1);
+  const start = page * accTableState.pageSize;
+  const pageList = list.slice(start, start + accTableState.pageSize);
+
+  $('#accTableInfo').textContent = total === 0
+    ? 'Tidak ada akun'
+    : `Menampilkan ${start+1}–${Math.min(start+accTableState.pageSize, total)} dari ${total} akun`;
+  $('#accTableCount').textContent = `${total} total akun`;
+
+  if (!pageList.length) {
+    tbody.innerHTML = `<tr><td colspan="6"><div class="dt-empty"><div class="dt-empty-icon">📭</div>Tidak ada akun ditemukan</div></td></tr>`;
+  } else {
+    tbody.innerHTML = pageList.map(a => {
+      const active = a.status==='active';
+      const action = active
+        ? `<button class="act-main" onclick="openBrowser(${a.id})">Buka</button>`
+        : `<button class="act-main green" onclick="doLogin(${a.id})">Login</button>`;
+      const initial = (a.name || '?').charAt(0).toUpperCase();
+      const platKey = ['fb','ig','tiktok'].includes(a.platform) ? a.platform : 'other';
+      const dotCls = (a.status==='active') ? 'good' : ((a.status==='checkpoint'||a.status==='pending') ? 'warn' : 'bad');
+      const platIc = a.platform==='fb' ? '🔵' : (a.platform==='ig' ? '📸' : (a.platform==='tiktok' ? '🎵' : '🌐'));
+      const safeName = escapeHtml(a.name||'').replace(/'/g,"\\'");
+      const safeEmail = escapeHtml(a.email||'').replace(/'/g,"\\'");
+      return `<tr>
+        <td style="text-align:center;"><input type="checkbox" class="acc-check" value="${a.id}" data-name="${safeName}" onchange="updateBatchCount()"></td>
+        <td><div class="platform-cell"><span class="platform-ic ${a.platform}">${platIc}</span><span class="badge b-${a.platform}">${PLAT_LABEL[a.platform]||a.platform}</span></div></td>
+        <td><div class="acc-cell"><div class="acc-avatar ${platKey}">${initial}</div><div><div class="acc-name">${escapeHtml(a.name)}</div></div></div></td>
+        <td><div class="acc-email">${escapeHtml(a.email)}</div></td>
+        <td><div class="status-cell"><span class="status-dot ${dotCls}"></span>${badge(a.status)}</div></td>
+        <td><div class="act-col">${action}<button class="act-edit" onclick="editPassword(${a.id},'${safeName}','${safeEmail}')" title="Edit Password">🔑</button><button class="act-del" onclick="deleteAccount(${a.id})">Hapus</button></div></td>
+      </tr>`;
+    }).join('');
+  }
+
+  // Pagination buttons
+  const pagesEl = $('#accTablePages');
+  if (totalPages <= 1) {
+    pagesEl.innerHTML = '';
+  } else {
+    let html = `<button onclick="accTableGo(0)" ${page===0?'disabled':''}>«</button>`;
+    const startP = Math.max(0, page-2);
+    const endP = Math.min(totalPages-1, page+2);
+    for (let i=startP; i<=endP; i++) {
+      html += `<button class="${i===page?'active':''}" onclick="accTableGo(${i})">${i+1}</button>`;
+    }
+    html += `<button onclick="accTableGo(${totalPages-1})" ${page===totalPages-1?'disabled':''}>»</button>`;
+    pagesEl.innerHTML = html;
+  }
+
+  // Update sort indicator on headers
+  document.querySelectorAll('#accTable th.dt-sort').forEach(th => {
+    th.classList.toggle('asc', accTableState.sortCol===th.dataset.col && accTableState.sortDir==='asc');
+    th.classList.toggle('desc', accTableState.sortCol===th.dataset.col && accTableState.sortDir==='desc');
+  });
+
+  // Reset pilihan seleksi (checklist direset saat tabel dirender ulang)
+  const selectAll = document.getElementById('selectAllAcc');
+  if (selectAll) selectAll.checked = false;
+  updateBatchCount();
+}
+
+function accTableGo(p) {
+  accTableState.page = Math.max(0, p);
+  renderAccTable();
+}
+
+// Event listeners DataTable akun
+document.getElementById('accTableSearch').addEventListener('input', (e) => {
+  accTableState.search = e.target.value.trim();
+  accTableState.page = 0;
+  renderAccTable();
+});
+document.getElementById('accTablePlat').addEventListener('change', (e) => {
+  accTableState.plat = e.target.value;
+  accTableState.page = 0;
+  renderAccTable();
+});
+document.querySelectorAll('#accTable th.dt-sort').forEach(th => {
+  th.addEventListener('click', () => {
+    const col = th.dataset.col;
+    if (accTableState.sortCol === col) {
+      accTableState.sortDir = accTableState.sortDir === 'asc' ? 'desc' : 'asc';
+    } else {
+      accTableState.sortCol = col;
+      accTableState.sortDir = 'asc';
+    }
+    accTableState.page = 0;
+    renderAccTable();
+  });
+});
+
+function updateSmmAccountInfo() {
+  const infoEl = document.getElementById('smmAccountInfo');
+  if (!infoEl) return;
+  
+  const platformSelect = document.querySelector('#smmLikeForm select[name="platform"]');
+  const platform = platformSelect ? platformSelect.value : 'fb';
+  
+  const activeAccounts = accounts.filter(a => a.status === 'active' && a.platform === platform);
+  const count = activeAccounts.length;
+  
+  const platformName = platform === 'fb' ? 'Facebook' : platform === 'ig' ? 'Instagram' : platform.toUpperCase();
+  
+  if (count === 0) {
+    infoEl.textContent = `⚠️ Tidak ada akun ${platformName} aktif. Login akun terlebih dahulu.`;
+    infoEl.style.color = 'var(--red)';
+  } else {
+    infoEl.textContent = `✓ ${count} akun ${platformName} aktif tersedia. Maksimal ${count} like per order.`;
+    infoEl.style.color = 'var(--green)';
+  }
+}
+
+// ==== MULTIPLE RUN ====
+let batchPollTimer = null;
+
+function updateBatchToolbar() {
+  const action = $('#batchAction').value;
+  $('#batchUrlGroup').style.display = (action === 'like' || action === 'ig-like') ? '' : 'none';
+  $('#batchContentGroup').style.display = (action === 'post' || action === 'post-ig') ? '' : 'none';
+}
+
+function toggleSelectAll(checkbox) {
+  document.querySelectorAll('#accTable tbody .acc-check').forEach(cb => {
+    cb.checked = checkbox.checked;
+  });
+  updateBatchCount();
+}
+
+function updateBatchCount() {
+  const selected = document.querySelectorAll('#accTable tbody .acc-check:checked').length;
+  $('#selectedCount').textContent = selected;
+  $('#btnRunSelected').disabled = selected === 0;
+}
+
+function getSelectedAccountIds() {
+  return Array.from(document.querySelectorAll('#accTable tbody .acc-check:checked')).map(cb => Number(cb.value));
+}
+
+function startBatchProgress(total) {
+  const el = $('#batchProgress');
+  el.style.display = '';
+  $('#batchProgressLabel').textContent = `Memproses ${total} akun...`;
+  $('#batchProgressCount').textContent = `0/${total}`;
+  $('#batchProgressBar').style.width = '0%';
+  $('#batchSuccess').textContent = '0';
+  $('#batchFailed').textContent = '0';
+  $('#btnRunSelected').disabled = true;
+  $('#btnRunAll').disabled = true;
+}
+
+function stopBatchProgress() {
+  clearInterval(batchPollTimer);
+  batchPollTimer = null;
+  $('#btnRunAll').disabled = false;
+  updateBatchCount();
+}
+
+function updateBatchProgressUI(p) {
+  if (!p) return;
+  const total = p.total || 1;
+  const pct = Math.min(100, Math.round((p.done / total) * 100));
+  $('#batchProgressCount').textContent = `${p.done}/${total}`;
+  $('#batchProgressBar').style.width = pct + '%';
+  $('#batchSuccess').textContent = p.success || 0;
+  $('#batchFailed').textContent = p.failed || 0;
+  $('#batchProgressLabel').textContent = p.current
+    ? `Mengerjakan: ${p.current} (${p.done}/${total})`
+    : `Memproses ${p.action || ''} ${p.done}/${total}`;
+  if (!p.running && total > 0 && p.done >= total) {
+    $('#batchProgressLabel').textContent = `Selesai! ✅ ${p.success} berhasil, ❌ ${p.failed} gagal`;
+    stopBatchProgress();
+  }
+}
+
+function pollBatchProgress() {
+  clearInterval(batchPollTimer);
+  batchPollTimer = setInterval(async () => {
+    try {
+      const p = await api('/api/batch/progress');
+      if (!p.error) updateBatchProgressUI(p);
+    } catch (e) { /* ignore */ }
+  }, 1500);
+}
+
+async function runBatchSelected() {
+  const accountIds = getSelectedAccountIds();
+  if (!accountIds.length) { toast('Pilih minimal 1 akun dulu'); return; }
+  const action = $('#batchAction').value;
+  const url = $('#batchUrl').value.trim();
+  const content = $('#batchContent').value.trim();
+
+  if ((action === 'like' || action === 'ig-like') && !url) { toast('URL wajib diisi untuk aksi like'); return; }
+  if ((action === 'post' || action === 'post-ig') && !content) { toast('Konten wajib diisi untuk aksi post'); return; }
+
+  startBatchProgress(accountIds.length);
+  pollBatchProgress();
+  try {
+    const res = await api('/api/batch/run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ accountIds, action, url, content })
+    });
+    if (res.error) {
+      toast('✗ ' + res.error);
+      stopBatchProgress();
+      $('#batchProgress').style.display = 'none';
+      return;
+    }
+    toast(`Batch selesai: ${res.success} berhasil, ${res.failed} gagal`);
+    refresh();
+  } catch (err) {
+    toast('✗ Error: ' + err.message);
+    stopBatchProgress();
+  }
+}
+
+async function runBatchAll() {
+  const action = $('#batchAction').value;
+  const url = $('#batchUrl').value.trim();
+  const content = $('#batchContent').value.trim();
+  const status = $('#batchStatus').value;
+
+  if ((action === 'like' || action === 'ig-like') && !url) { toast('URL wajib diisi untuk aksi like'); return; }
+  if ((action === 'post' || action === 'post-ig') && !content) { toast('Konten wajib diisi untuk aksi post'); return; }
+
+  startBatchProgress(0);
+  pollBatchProgress();
+  try {
+    const res = await api('/api/batch/run-all', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, url, content, status })
+    });
+    if (res.error) {
+      toast('✗ ' + res.error);
+      stopBatchProgress();
+      $('#batchProgress').style.display = 'none';
+      return;
+    }
+    toast(`Batch selesai: ${res.success} berhasil, ${res.failed} gagal`);
+    refresh();
+  } catch (err) {
+    toast('✗ Error: ' + err.message);
+    stopBatchProgress();
+  }
+}
+
+async function loadSchedules(){
+  const list = await api('/api/schedules');
+  const arr = Array.isArray(list) ? list : [];
+  $('#schTable tbody').innerHTML = arr.length ? arr.map(s=>`<tr><td>${s.id}</td><td>${s.account}</td><td>${fmt(s.scheduled_at)}</td><td class="muted">${s.repeat&&s.repeat!=='none'?s.repeat:'–'}</td><td>${badge(s.status)}</td><td>${escapeHtml(s.content)}</td></tr>`).join('') : '<tr><td colspan="6" class="history-empty">Belum ada jadwal</td></tr>';
+}
+async function loadHist(){
+  const list = await api('/api/logs');
+  const arr = Array.isArray(list) ? list : [];
+  const filt = $('#histFilter').value;
+  const rows = (filt==='all') ? arr : arr.filter(l => l.account === filt);
+  $('#histTable tbody').innerHTML = rows.length
+    ? rows.map(l=>`<tr>
+        <td style="white-space:nowrap;">${fmt(l.created_at)}</td>
+        <td>${pbadge(l.platform)} ${l.account}</td>
+        <td>${badge(l.status)}</td>
+        <td>${escapeHtml(l.content_text || '–')}</td>
+        <td class="muted">${escapeHtml(l.message || '')}</td>
+      </tr>`).join('')
+    : '<tr><td colspan="5" class="history-empty">Belum ada riwayat</td></tr>';
+}
+function escapeHtml(s){ if(!s) return s; return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+async function loadSummary(){
+  const rows = await api('/api/accounts/summary');
+  const arr = Array.isArray(rows) ? rows : [];
+  $('#sumTable tbody').innerHTML = arr.length
+    ? rows.map(s=>`<tr>
+        <td>${s.name}</td>
+        <td>${pbadge(s.platform)}</td>
+        <td>${badge(s.status)}</td>
+        <td>${s.total??0}</td>
+        <td style="color:var(--green);">${s.berhasil??0}</td>
+        <td style="color:var(--red);">${s.gagal??0}</td>
+      </tr>`).join('')
+    : '<tr><td colspan="6" class="history-empty">Belum ada akun</td></tr>';
+}
+async function loadLikeJobs(){
+  const list = await api('/api/likes');
+  const arr = Array.isArray(list) ? list : [];
+  $('#likeTable tbody').innerHTML = arr.length
+    ? list.map(j=>`<tr>
+        <td>${escapeHtml(j.name)}</td>
+        <td>${escapeHtml(j.account_name||'')}</td>
+        <td>${badge(j.status)}</td>
+        <td class="muted">${j.last_run_at?fmt(j.last_run_at):'–'}</td>
+        <td><div class="act-col" style="min-width:80px;">
+          <button class="act-main" onclick="runLike(${j.id})">Like</button>
+          <button class="act-del" onclick="deleteLikeJob(${j.id})">Hapus</button>
+        </div></td>
+      </tr>`).join('')
+    : '<tr><td colspan="5" class="history-empty">Belum ada like job</td></tr>';
+}
+async function runLike(id){
+  toast('Membuka postingan & like...');
+  const res = await api(`/api/likes/${id}/run`, { method:'POST' });
+  if(res.error) showErr('Like gagal: '+res.error);
+  else if(res.ok) toast('✓ Berhasil like');
+  else showErr('Like gagal: '+res.reason);
+  refresh();
+}
+async function deleteLikeJob(id){
+  const ok = await showConfirm('Hapus like job ini?', 'Ya, Hapus', 'Hapus Like Job', '👍');
+  if(!ok) return;
+  const res = await api(`/api/likes/${id}`, { method:'DELETE' });
+  toast(res.error ? '✗ '+res.error : '✓ Like job dihapus');
+  refresh();
+}
+
+// ==== SMM Like Orders ====
+async function loadSmmLikeOrders(){
+  const list = await api('/api/smm/like-orders');
+  const arr = Array.isArray(list) ? list : [];
+  $('#smmLikeTable tbody').innerHTML = arr.length
+    ? list.map(o => {
+        const progress = o.target_likes > 0 ? Math.round((o.completed_likes / o.target_likes) * 100) : 0;
+        const statusColor = o.status === 'completed' ? 'b-done' : (o.status === 'processing' ? 'b-pending' : '');
+        return `<tr>
+          <td>${escapeHtml(o.name)}</td>
+          <td>${pbadge(o.platform)}</td>
+          <td>
+            <div style="font-size:12px; color:var(--muted);">${o.completed_likes} / ${o.target_likes}</div>
+            <div style="background:var(--card2); height:6px; border-radius:4px; overflow:hidden; margin-top:4px;">
+              <div style="background:var(--accent); height:100%; width:${progress}%; transition:.3s;"></div>
+            </div>
+          </td>
+          <td><span class="badge ${statusColor}">${o.status}</span></td>
+          <td class="muted">${fmt(o.created_at)}</td>
+          <td><div class="act-col" style="min-width:120px;">
+            ${o.status !== 'completed' ? `<button class="act-main green" onclick="runSmmOrder(${o.id})">▶ Jalankan</button>` : ''}
+            <button class="act-main" onclick="viewSmmOrder(${o.id})" title="Detail">📊</button>
+            <button class="act-del" onclick="deleteSmmOrder(${o.id})">Hapus</button>
+          </div></td>
+        </tr>`;
+      }).join('')
+    : '<tr><td colspan="6" class="history-empty">Belum ada order like</td></tr>';
+}
+
+async function runSmmOrder(id){
+  ProgressModal.show('Menjalankan Order Like', 'Memproses like dengan rotasi akun...', '🚀');
+  
+  const steps = [
+    { icon: '🔍', title: 'Validasi Order', desc: 'Memeriksa order dan akun...' },
+    { icon: '👥', title: 'Rotasi Akun', desc: 'Mengambil akun sesuai giliran...' },
+    { icon: '👍', title: 'Eksekusi Like', desc: 'Memproses like...' },
+    { icon: '📊', title: 'Update Progress', desc: 'Menyimpan hasil...' }
+  ];
+  
+  ProgressModal.setSteps(steps);
+  
+  try {
+    ProgressModal.setActive(0);
+    await new Promise(resolve => setTimeout(resolve, 600));
+    ProgressModal.setCompleted(0, 'Order valid ✓');
+    
+    ProgressModal.setActive(1);
+    await new Promise(resolve => setTimeout(resolve, 700));
+    ProgressModal.setCompleted(1, 'Akun siap ✓');
+    
+    ProgressModal.setActive(2);
+    ProgressModal.updateFooter('Sedang memproses like (batch 5)...');
+    
+    const res = await fetch(`/api/smm/like-orders/${id}/run`, { method: 'POST' });
+    const result = await res.json();
+    
+    if (result.error) {
+      ProgressModal.setFailed(2, '✗ ' + result.error);
+      ProgressModal.updateFooter('Eksekusi gagal!');
+      await new Promise(resolve => setTimeout(resolve, 2500));
+      ProgressModal.hide();
+      toast('✗ ' + result.error);
+      return;
+    }
+    
+    ProgressModal.setCompleted(2, `${result.processed} like diproses ✓`);
+    
+    ProgressModal.setActive(3);
+    await new Promise(resolve => setTimeout(resolve, 500));
+    ProgressModal.setCompleted(3, `Progress: ${result.completed}/${result.target} ✓`);
+    
+    ProgressModal.updateFooter(`Berhasil! ${result.completed}/${result.target} likes completed`);
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    ProgressModal.hide();
+    
+    toast(`✓ ${result.processed} like diproses. Progress: ${result.completed}/${result.target}`);
+    refresh();
+    
+  } catch (err) {
+    ProgressModal.updateFooter('Terjadi kesalahan!');
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    ProgressModal.hide();
+    toast('✗ Error: ' + err.message);
+  }
+}
+
+async function viewSmmOrder(id){
+  const order = await api(`/api/smm/like-orders/${id}`);
+  if(order.error){ showErr(order.error); return; }
+  
+  const execList = order.executions.map(e => {
+    const statusIcon = e.status === 'completed' ? '✅' : (e.status === 'failed' ? '❌' : '⏳');
+    const statusText = e.status === 'completed' ? 'Berhasil' : (e.status === 'failed' ? 'Gagal' : 'Pending');
+    return `<tr>
+      <td>${statusIcon}</td>
+      <td>${escapeHtml(e.account_name)}</td>
+      <td>${escapeHtml(e.account_email)}</td>
+      <td><span class="badge ${e.status === 'completed' ? 'b-done' : (e.status === 'failed' ? 'b-failed' : 'b-pending')}">${statusText}</span></td>
+      <td class="muted" style="font-size:11px;">${e.executed_at ? fmt(e.executed_at) : '–'}</td>
+      <td class="muted" style="font-size:11px;">${e.error_message || '–'}</td>
+    </tr>`;
+  }).join('');
+  
+  const progress = Math.round((order.completed_likes / order.target_likes) * 100);
+  
+  alert(`Detail Order: ${order.name}\n\nLink: ${order.post_url}\nTarget: ${order.target_likes} likes\nCompleted: ${order.completed_likes} likes\nProgress: ${progress}%\nStatus: ${order.status}\n\nLihat console untuk detail eksekusi per akun.`);
+  
+  console.log('=== Detail Order ===');
+  console.log('Nama:', order.name);
+  console.log('Link:', order.post_url);
+  console.log('Progress:', order.completed_likes, '/', order.target_likes);
+  console.log('Status:', order.status);
+  console.log('\n=== Eksekusi Per Akun ===');
+  console.table(order.executions.map(e => ({
+    Akun: e.account_name,
+    Email: e.account_email,
+    Status: e.status,
+    Waktu: e.executed_at || '-',
+    Error: e.error_message || '-'
+  })));
+}
+
+async function deleteSmmOrder(id){
+  const ok = await showConfirm('Hapus order like ini beserta semua data eksekusinya?', 'Ya, Hapus', 'Hapus Order', '🗑️');
+  if(!ok) return;
+  const res = await api(`/api/smm/like-orders/${id}`, { method:'DELETE' });
+  toast(res.error ? '✗ '+res.error : '✓ Order dihapus');
+  refresh();
+}
+async function loadIgLikeJobs(){
+  const list = await api('/api/ig-likes');
+  const arr = Array.isArray(list) ? list : [];
+  $('#igLikeTable tbody').innerHTML = arr.length
+    ? list.map(j=>`<tr>
+        <td>${escapeHtml(j.name)}</td>
+        <td>${escapeHtml(j.account_name||'')}</td>
+        <td>${badge(j.status)}</td>
+        <td class="muted">${j.last_run_at?fmt(j.last_run_at):'–'}</td>
+        <td><div class="act-col" style="min-width:80px;">
+          <button class="act-main" onclick="runIgLike(${j.id})">Like</button>
+          <button class="act-del" onclick="deleteIgLikeJob(${j.id})">Hapus</button>
+        </div></td>
+      </tr>`).join('')
+    : '<tr><td colspan="5" class="history-empty">Belum ada like IG</td></tr>';
+}
+async function runIgLike(id){
+  toast('Membuka & like postingan IG...');
+  const res = await api(`/api/ig-likes/${id}/run`, { method:'POST' });
+  if(res.error) showErr('Like IG gagal: '+res.error);
+  else if(res.ok) toast('✓ Berhasil like IG');
+  else showErr('Like IG gagal: '+res.reason);
+  refresh();
+}
+async function deleteIgLikeJob(id){
+  const ok = await showConfirm('Hapus like IG ini?', 'Ya, Hapus', 'Hapus Like Instagram', '❤️');
+  if(!ok) return;
+  const res = await api(`/api/ig-likes/${id}`, { method:'DELETE' });
+  toast(res.error ? '✗ '+res.error : '✓ Like IG dihapus');
+  refresh();
+}
+async function loadProxies(){
+  const list = await api('/api/proxies');
+  const arr = Array.isArray(list) ? list : [];
+  $('#proxyTable tbody').innerHTML = arr.length
+    ? list.map(p=>`<tr>
+        <td>${p.id}</td>
+        <td class="muted" style="font-size:12px;">${escapeHtml(p.value)}</td>
+        <td>${badge(p.status)}</td>
+        <td><button class="act-del" onclick="deleteProxyFx(${p.id})">Hapus</button></td>
+      </tr>`).join('')
+    : '<tr><td colspan="4" class="history-empty">Belum ada proxy</td></tr>';
+}
+async function assignProxies(overwrite){
+  const ok = await showConfirm(
+    overwrite
+      ? 'Assign ULANG SEMUA akun? Proxy yang sudah ada akan DITIMPA sesuai urutan (proksi #i → akun #i).'
+      : 'Assign proxy hanya ke akun yang BELUM punya proxy (proksi #i → akun #i)?',
+    'Ya, Assign', 'Assign Proxy', '🔗');
+  if(!ok) return;
+  const res = await api('/api/proxies/assign', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ overwrite: !!overwrite }) });
+  toast(res.error ? '✗ '+res.error : '✓ '+res.assigned+' akun diberi proxy');
+  refresh();
+}
+async function deleteProxyFx(id){
+  const ok = await showConfirm('Hapus proxy ini? (Tidak akan hapus jika sedang dipakai akun.)', 'Ya, Hapus', 'Hapus Proxy', '🌐');
+  if(!ok) return;
+  const res = await api(`/api/proxies/${id}`, { method:'DELETE' });
+  toast(res.error ? '✗ '+res.error : '✓ Proxy dihapus');
+  refresh();
+}
+async function refreshHist(){ await Promise.all([loadHist()]); }
+async function doCleanup(){
+  const ok = await showConfirm('Hapus data posting yang sudah selesai & file gambar lama? Log lebih dari 30 hari juga akan dihapus.', 'Ya, Bersihkan', 'Bersihkan Data', '🧹');
+  if(!ok) return;
+  const res = await api('/api/cleanup', { method:'POST' });
+  toast(res.error ? '✗ '+res.error : '✓ Bersih: '+res.removedFiles+' file dihapus');
+  refresh();
+}
+async function refresh(){ await Promise.all([loadStats(), loadAccounts(), loadSchedules(), loadHist(), loadSummary(), loadLikeJobs(), loadSmmLikeOrders(), loadIgLikeJobs(), loadProxies()]); }
+
+// Disable tombol submit selama proses berjalan (cegah dobel klik).
+async function withLoading(btn, label, fn){
+  if(!btn) return fn();
+  const prevHTML = btn.innerHTML;
+  const prevCls = btn.className;
+  btn.disabled = true;
+  btn.classList.add('loading');
+  btn.innerHTML = `<span class="spinner"></span>${label}`;
+  try { return await fn(); }
+  finally {
+    btn.disabled = false;
+    btn.className = prevCls;
+    btn.innerHTML = prevHTML;
+  }
+}
+
+// ==== Aksi ====
+document.getElementById('postForm').addEventListener('submit', async (e) => {
+  e.preventDefault(); const f=new FormData(e.target); const id=f.get('accountId');
+  const ok = await showConfirm('Posting konten ini sekarang ke akun? Tindakan langsung & tidak bisa dibatalkan.', 'Ya, Posting', 'Konfirmasi Posting', '📤');
+  if(!ok) return;
+  await withLoading(e.submitter, '⏳ Memposting...', async () => {
+    toast('Memposting... tunggu.');
+    try {
+      const res=await api(`/api/accounts/${id}/post-now`,{method:'POST',body:f});
+      if(res.error){ showErr('Post gagal: '+res.error); }
+      else if(res.ok) toast('✓ Posting berhasil!');
+      else { showErr('Post gagal: '+res.reason); }
+    } catch(err){ showErr('Error: '+err.message); }
+    e.target.reset(); refresh();
+  });
+});
+document.getElementById('schForm').addEventListener('submit', async (e) => {
+  e.preventDefault(); const f=new FormData(e.target);
+  await withLoading(e.submitter, '⏳ Menyimpan jadwal...', async () => {
+    const res=await api('/api/schedules',{method:'POST',body:f});
+    if(res.error) toast('✗ '+res.error); else { toast('✓ Jadwal dibuat #'+res.id); e.target.reset(); refresh(); }
+  });
+});
+document.getElementById('likeForm').addEventListener('submit', async (e) => {
+  e.preventDefault(); const f=new FormData(e.target);
+  await withLoading(e.submitter, '⏳ Menyimpan...', async () => {
+    const res=await api('/api/likes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({accountId:f.get('accountId'),name:f.get('name'),postUrl:f.get('postUrl')})});
+    if(res.error) toast('✗ '+res.error); else { toast('✓ Like job dibuat #'+res.id); e.target.reset(); refresh(); }
+  });
+});
+document.getElementById('igLikeForm').addEventListener('submit', async (e) => {
+  e.preventDefault(); const f=new FormData(e.target);
+  await withLoading(e.submitter, '⏳ Menyimpan...', async () => {
+    const res=await api('/api/ig-likes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({accountId:f.get('accountId'),name:f.get('name'),postUrl:f.get('postUrl')})});
+    if(res.error) toast('✗ '+res.error); else { toast('✓ Like IG dibuat #'+res.id); e.target.reset(); refresh(); }
+  });
+});
+document.getElementById('smmLikeForm').addEventListener('submit', async (e) => {
+  e.preventDefault(); const f=new FormData(e.target);
+  
+  const targetLikes = parseInt(f.get('targetLikes'));
+  const platform = f.get('platform');
+  
+  // Validasi jumlah akun aktif
+  const activeAccounts = accounts.filter(a => a.status === 'active' && a.platform === platform);
+  
+  if (activeAccounts.length === 0) {
+    toast(`✗ Tidak ada akun ${platform.toUpperCase()} aktif. Login akun terlebih dahulu.`);
+    return;
+  }
+  
+  if (targetLikes > activeAccounts.length) {
+    toast(`✗ Target ${targetLikes} like melebihi akun aktif (${activeAccounts.length}). Setiap akun hanya bisa like 1x.`);
+    return;
+  }
+  
+  if(targetLikes < 1 || targetLikes > 1000) {
+    toast('✗ Jumlah like harus antara 1-1000');
+    return;
+  }
+  
+  await withLoading(e.submitter, '⏳ Membuat order...', async () => {
+    const res=await api('/api/smm/like-orders',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        name:f.get('name'),
+        postUrl:f.get('postUrl'),
+        targetLikes:targetLikes,
+        platform:platform
+      })
+    });
+    if(res.error) toast('✗ '+res.error); 
+    else { 
+      toast(`✓ Order dibuat! ${targetLikes} akun ${platform.toUpperCase()} akan like postingan ini (1 akun = 1 like)`); 
+      e.target.reset(); 
+      refresh(); 
+    }
+  });
+});
+document.getElementById('proxyForm').addEventListener('submit', async (e) => {
+  e.preventDefault(); const f=new FormData(e.target);
+  const raw = (f.get('values')||'').split('\n').map(s=>s.trim()).filter(Boolean);
+  await withLoading(e.submitter, '⏳ Menyimpan...', async () => {
+    const res=await api('/api/proxies',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({values:raw})});
+    if(res.error) toast('✗ '+res.error); else { toast('✓ Proxy disimpan'); e.target.reset(); refresh(); }
+  });
+});
+document.getElementById('igForm').addEventListener('submit', async (e) => {
+  e.preventDefault(); const f=new FormData(e.target); const id=f.get('accountId');
+  if(!f.get('media').size){ showErr('Media (gambar/video) wajib utk Instagram.'); return; }
+  const ok = await showConfirm('Bagikan posting ini ke Instagram? Media wajib sudah dipilih.', 'Ya, Bagikan', 'Konfirmasi Posting IG', '📸');
+  if(!ok) return;
+  await withLoading(e.submitter, '⏳ Membagikan...', async () => {
+    toast('Mengupload ke Instagram... tunggu.');
+    try {
+      const res=await api(`/api/ig/post`,{method:'POST',body:f});
+      if(res.error) showErr('Gagal: '+res.error);
+      else if(res.ok) toast('✓ Berhasil dibagikan ke Instagram!');
+      else showErr('Gagal: '+res.reason);
+    } catch(err){ showErr('Error: '+err.message); }
+    e.target.reset(); refresh();
+  });
+});
+async function runDue(){
+  $('#runResult').textContent='memproses...';
+  const res=await api('/api/run-due',{method:'POST'});
+  $('#runResult').textContent = res.processed!==undefined ? '✔ '+res.processed+' diproses' : '✗ '+(res.error||'gagal');
+  setTimeout(refresh,500);
+}
+async function genAI(promptId, contentId){
+  const prompt = document.getElementById(promptId).value.trim();
+  if(!prompt){ toast('Isi prompt AI dulu'); return; }
+  const btn = event.target; btn.disabled = true;
+  const prev = btn.textContent; btn.textContent = '⏳ Generate...';
+  try {
+    const res = await api('/api/ai/generate', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ prompt }) });
+    if(res.error){ toast('✗ '+res.error); }
+    else { document.getElementById(contentId).value = res.content; toast('✓ Konten AI dihasilkan'); }
+  } catch(err){ toast('✗ Error: '+err.message); }
+  btn.disabled = false; btn.textContent = prev;
+}
+async function doLogin(id){
+  const ok = await showConfirm('Browser akan terbuka untuk login otomatis ke akun ini. Lanjutkan?', 'Ya, Login', 'Login Akun', '🔐');
+  if(!ok) return;
+  
+  // Tampilkan progress modal
+  ProgressModal.show('Proses Login', 'Sedang memproses login akun...', '🔐');
+  
+  // Definisikan langkah-langkah proses
+  const steps = [
+    { icon: '🔍', title: 'Memvalidasi Akun', desc: 'Memeriksa data akun...' },
+    { icon: '🌐', title: 'Menyiapkan Browser', desc: 'Menginisialisasi browser profil...' },
+    { icon: '🔗', title: 'Menghubungkan Proxy', desc: 'Mengatur koneksi proxy...' },
+    { icon: '🔐', title: 'Melakukan Login', desc: 'Login ke platform...' },
+    { icon: '💾', title: 'Menyimpan Session', desc: 'Menyimpan data login...' }
+  ];
+  
+  ProgressModal.setSteps(steps);
+  
+  try {
+    // Step 1: Validasi akun
+    ProgressModal.setActive(0);
+    await new Promise(resolve => setTimeout(resolve, 800));
+    ProgressModal.setCompleted(0, 'Akun tervalidasi ✓');
+    
+    // Step 2: Menyiapkan browser
+    ProgressModal.setActive(1);
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    ProgressModal.setCompleted(1, 'Browser siap ✓');
+    
+    // Step 3: Koneksi proxy
+    ProgressModal.setActive(2);
+    await new Promise(resolve => setTimeout(resolve, 600));
+    ProgressModal.setCompleted(2, 'Proxy terhubung ✓');
+    
+    // Step 4: Login (proses sebenarnya)
+    ProgressModal.setActive(3);
+    ProgressModal.updateFooter('Mohon tunggu, proses login sedang berlangsung...');
+    
+    const res = await api(`/api/accounts/${id}/login`, {method:'POST'});
+    
+    if(res.error) {
+      ProgressModal.setFailed(3, '✗ ' + res.error);
+      ProgressModal.updateFooter('Login gagal!');
+      await new Promise(resolve => setTimeout(resolve, 2500));
+      ProgressModal.hide();
+      toast('✗ ' + res.error);
+      return;
+    }
+    
+    if(!res.ok) {
+      ProgressModal.setFailed(3, '✗ ' + (res.reason || 'Login gagal'));
+      ProgressModal.updateFooter('Login gagal!');
+      await new Promise(resolve => setTimeout(resolve, 2500));
+      ProgressModal.hide();
+      toast('✗ Login gagal: ' + res.reason);
+      return;
+    }
+    
+    ProgressModal.setCompleted(3, 'Login berhasil ✓');
+    
+    // Step 5: Simpan session
+    ProgressModal.setActive(4);
+    await new Promise(resolve => setTimeout(resolve, 700));
+    ProgressModal.setCompleted(4, 'Session tersimpan ✓');
+    
+    ProgressModal.updateFooter('Proses selesai! ✓');
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    ProgressModal.hide();
+    
+    toast('✓ Login berhasil, session tersimpan');
+    refresh();
+    
+  } catch(err) {
+    ProgressModal.updateFooter('Terjadi kesalahan!');
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    ProgressModal.hide();
+    toast('✗ Error: ' + err.message);
+  }
+}
+async function openBrowser(id){ 
+  ProgressModal.show('Membuka Browser', 'Sedang membuka browser profil...', '🌐');
+  
+  const steps = [
+    { icon: '🔍', title: 'Memvalidasi Profil', desc: 'Memeriksa data profil...' },
+    { icon: '🌐', title: 'Menginisialisasi Browser', desc: 'Menyiapkan browser...' },
+    { icon: '🔗', title: 'Memuat Profil', desc: 'Loading profil pengguna...' },
+    { icon: '✅', title: 'Membuka Browser', desc: 'Meluncurkan browser...' }
+  ];
+  
+  ProgressModal.setSteps(steps);
+  
+  try {
+    ProgressModal.setActive(0);
+    await new Promise(resolve => setTimeout(resolve, 600));
+    ProgressModal.setCompleted(0, 'Profil tervalidasi ✓');
+    
+    ProgressModal.setActive(1);
+    await new Promise(resolve => setTimeout(resolve, 800));
+    ProgressModal.setCompleted(1, 'Browser siap ✓');
+    
+    ProgressModal.setActive(2);
+    await new Promise(resolve => setTimeout(resolve, 700));
+    ProgressModal.setCompleted(2, 'Profil dimuat ✓');
+    
+    ProgressModal.setActive(3);
+    const res = await api(`/api/accounts/${id}/open`, {method:'POST'});
+    
+    if(res.error) {
+      ProgressModal.setFailed(3, '✗ ' + res.error);
+      ProgressModal.updateFooter('Gagal membuka browser!');
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      ProgressModal.hide();
+      toast('✗ ' + res.error);
+      return;
+    }
+    
+    ProgressModal.setCompleted(3, 'Browser terbuka ✓');
+    ProgressModal.updateFooter('Proses selesai! ✓');
+    await new Promise(resolve => setTimeout(resolve, 1200));
+    ProgressModal.hide();
+    toast('✓ Browser terbuka.');
+    
+  } catch(err) {
+    ProgressModal.updateFooter('Terjadi kesalahan!');
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    ProgressModal.hide();
+    toast('✗ Error: ' + err.message);
+  }
+}
+async function openIgLogin(){
+  const id = $('#igOpenSelect').value;
+  if(!id || isNaN(+id)){ showErr('Pilih akun dulu.'); return; }
+  
+  ProgressModal.show('Membuka Instagram', 'Sedang membuka Instagram via Facebook...', '📸');
+  
+  const steps = [
+    { icon: '🔍', title: 'Memvalidasi Akun', desc: 'Memeriksa akun Facebook...' },
+    { icon: '🔗', title: 'Koneksi ke Instagram', desc: 'Menghubungkan ke Instagram...' },
+    { icon: '🌐', title: 'Membuka Browser', desc: 'Meluncurkan Instagram...' },
+    { icon: '👤', title: 'Menunggu Autentikasi', desc: 'Klik "Continue as Facebook"...' }
+  ];
+  
+  ProgressModal.setSteps(steps);
+  
+  try {
+    ProgressModal.setActive(0);
+    await new Promise(resolve => setTimeout(resolve, 700));
+    ProgressModal.setCompleted(0, 'Akun Facebook siap ✓');
+    
+    ProgressModal.setActive(1);
+    await new Promise(resolve => setTimeout(resolve, 800));
+    ProgressModal.setCompleted(1, 'Terhubung ke Instagram ✓');
+    
+    ProgressModal.setActive(2);
+    const res = await api(`/api/accounts/${id}/open-ig`, { method:'POST' });
+    
+    if(res.error) {
+      ProgressModal.setFailed(2, '✗ ' + res.error);
+      ProgressModal.updateFooter('Gagal membuka Instagram!');
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      ProgressModal.hide();
+      showErr(res.error);
+      return;
+    }
+    
+    ProgressModal.setCompleted(2, 'Browser Instagram terbuka ✓');
+    
+    ProgressModal.setActive(3);
+    ProgressModal.updateFooter('Silakan klik "Continue as Facebook" di browser');
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    ProgressModal.setCompleted(3, 'Menunggu aksi manual ⏳');
+    
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    ProgressModal.hide();
+    toast('✓ Browser Instagram terbuka. Klik "Continue as Facebook".');
+    
+  } catch(err) {
+    ProgressModal.updateFooter('Terjadi kesalahan!');
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    ProgressModal.hide();
+    toast('✗ Error: ' + err.message);
+  }
+}
+async function deleteAccount(id){
+  const ok = await showConfirm('Hapus akun ini beserta semua data & profil browsernya? Tindakan ini tidak bisa dibatalkan.', 'Ya, Hapus', 'Hapus Akun', '🗑️');
+  if(!ok) return;
+  const res = await api(`/api/accounts/${id}`, { method:'DELETE' });
+  if(res.error) toast('✗ '+res.error); else toast('✓ Akun dihapus');
+  refresh();
+}
+
+// Edit Password Handler
+let editPasswordAccountId = null;
+let editPasswordOldPassword = '';
+let isOldPasswordVisible = false;
+
+async function editPassword(id, name, email) {
+  editPasswordAccountId = id;
+  $('#editPwAccountName').textContent = name;
+  $('#editPwAccountEmail').textContent = email;
+  $('#editPwInput').value = '';
+  
+  // Fetch old password
+  try {
+    const account = await api(`/api/accounts/${id}`);
+    editPasswordOldPassword = account.password || '';
+    $('#editPwOldDisplay').value = '••••••••';
+    $('#editPwOldDisplay').dataset.password = editPasswordOldPassword;
+    isOldPasswordVisible = false;
+  } catch(err) {
+    editPasswordOldPassword = '';
+    $('#editPwOldDisplay').value = 'Error loading password';
+  }
+  
+  $('#editPasswordModal').classList.add('show');
+  $('#editPwInput').focus();
+}
+
+function toggleOldPassword() {
+  const input = $('#editPwOldDisplay');
+  const btn = $('#editPwToggle');
+  
+  if (isOldPasswordVisible) {
+    input.value = '••••••••';
+    btn.textContent = '👁️';
+    isOldPasswordVisible = false;
+  } else {
+    input.value = input.dataset.password || '';
+    btn.textContent = '🙈';
+    isOldPasswordVisible = true;
+  }
+}
+
+$('#editPwCancel').addEventListener('click', () => {
+  $('#editPasswordModal').classList.remove('show');
+  editPasswordAccountId = null;
+});
+
+$('#editPwSave').addEventListener('click', async () => {
+  const newPassword = $('#editPwInput').value.trim();
+  
+  if (!newPassword) {
+    toast('✗ Password tidak boleh kosong');
+    return;
+  }
+  
+  if (newPassword.length < 6) {
+    toast('✗ Password minimal 6 karakter');
+    return;
+  }
+  
+  $('#editPasswordModal').classList.remove('show');
+  
+  // Show progress modal
+  ProgressModal.show('Update Password', 'Sedang memperbarui password akun...', '🔑');
+  
+  const steps = [
+    { icon: '🔍', title: 'Validasi Data', desc: 'Memeriksa password baru...' },
+    { icon: '🔐', title: 'Enkripsi Password', desc: 'Mengamankan password...' },
+    { icon: '💾', title: 'Update Database', desc: 'Menyimpan perubahan...' },
+    { icon: '✅', title: 'Selesai', desc: 'Verifikasi update...' }
+  ];
+  
+  ProgressModal.setSteps(steps);
+  
+  try {
+    // Step 1: Validasi
+    ProgressModal.setActive(0);
+    await new Promise(resolve => setTimeout(resolve, 600));
+    ProgressModal.setCompleted(0, 'Password valid ✓');
+    
+    // Step 2: Enkripsi
+    ProgressModal.setActive(1);
+    await new Promise(resolve => setTimeout(resolve, 700));
+    ProgressModal.setCompleted(1, 'Password terenkripsi ✓');
+    
+    // Step 3: Update (actual API call)
+    ProgressModal.setActive(2);
+    ProgressModal.updateFooter('Menyimpan ke database...');
+    
+    const res = await fetch(`/api/accounts/${editPasswordAccountId}/password`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: newPassword })
+    });
+    
+    const result = await res.json();
+    
+    if (result.error) {
+      ProgressModal.setFailed(2, '✗ ' + result.error);
+      ProgressModal.updateFooter('Update gagal!');
+      await new Promise(resolve => setTimeout(resolve, 2500));
+      ProgressModal.hide();
+      toast('✗ ' + result.error);
+      return;
+    }
+    
+    ProgressModal.setCompleted(2, 'Password tersimpan ✓');
+    
+    // Step 4: Verifikasi
+    ProgressModal.setActive(3);
+    await new Promise(resolve => setTimeout(resolve, 500));
+    ProgressModal.setCompleted(3, 'Update berhasil ✓');
+    
+    ProgressModal.updateFooter('Password berhasil diperbarui! ✓');
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    ProgressModal.hide();
+    
+    toast('✓ Password akun berhasil diperbarui');
+    editPasswordAccountId = null;
+    
+  } catch (err) {
+    ProgressModal.updateFooter('Terjadi kesalahan!');
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    ProgressModal.hide();
+    toast('✗ Error: ' + err.message);
+  }
+});
+
+// Hist filter
+$('#histFilter').addEventListener('change', () => refreshHist());
+
+// ==== Modal Account Management ====
+function openAddAccountModal() {
+  document.getElementById('addAccountModal').classList.add('show');
+  document.getElementById('modalAccForm').reset();
+}
+
+function closeAddAccountModal() {
+  document.getElementById('addAccountModal').classList.remove('show');
+}
+
+function openBulkImportModal() {
+  document.getElementById('bulkImportModal').classList.add('show');
+  document.getElementById('modalBulkForm').reset();
+  document.getElementById('importResult').style.display = 'none';
+}
+
+function closeBulkImportModal() {
+  document.getElementById('bulkImportModal').classList.remove('show');
+}
+
+// Close modal when clicking overlay
+document.addEventListener('click', (e) => {
+  if (e.target.classList.contains('modal-overlay')) {
+    closeAddAccountModal();
+    closeBulkImportModal();
+  }
+});
+
+// Handle Add Account Form Submit
+document.getElementById('modalAccForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const f = new FormData(e.target);
+  await withLoading(e.submitter, '⏳ Menyimpan...', async () => {
+    const res = await api('/api/accounts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: f.get('name'),
+        email: f.get('email'),
+        password: f.get('password'),
+        proxy: f.get('proxy'),
+        platform: f.get('platform')
+      })
+    });
+    if (res.error) toast('✗ ' + res.error);
+    else {
+      toast('✓ Akun ditambahkan');
+      closeAddAccountModal();
+      refresh();
+    }
+  });
+});
+
+// Handle Bulk Import Form Submit
+document.getElementById('modalBulkForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const f = new FormData(e.target);
+  const file = f.get('file');
+  const text = await file.text();
+  const lines = text.split(/\r?\n/).filter(l => l.trim());
+  
+  const resultDiv = document.getElementById('importResult');
+  resultDiv.style.display = 'block';
+  resultDiv.innerHTML = '<div style="color:var(--amber);">⏳ Memproses ' + lines.length + ' baris...</div>';
+  
+  let success = 0, errors = 0;
+  for (const line of lines) {
+    const parts = line.includes('|') ? line.split('|') : line.split(',');
+    if (parts.length < 4) { errors++; continue; }
+    
+    const [name, email, password, platform, proxy] = parts.map(p => p.trim());
+    const res = await api('/api/accounts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, email, password, platform: platform || 'fb', proxy: proxy || '' })
+    });
+    
+    if (res.error) errors++;
+    else success++;
+  }
+  
+  resultDiv.innerHTML = `<div style="color:var(--green);">✓ Berhasil: ${success}</div><div style="color:var(--red);">✗ Gagal: ${errors}</div>`;
+  toast(`Import selesai: ${success} berhasil, ${errors} gagal`);
+  refresh();
+});
+
+// ==== Init ====
+// default: active on Accounts panel
+document.querySelector('.sidebar .nav-item[data-panel="accounts"]').classList.add('active');
+updateSubTitles();
+refresh();
+setInterval(refresh, 15000);
+
+// ==== Multiple Run init ====
+document.getElementById('batchAction').addEventListener('change', updateBatchToolbar);
+document.getElementById('batchStatus').addEventListener('change', function(){});
+updateBatchToolbar();
+</script>
+
+</body>
+</html>

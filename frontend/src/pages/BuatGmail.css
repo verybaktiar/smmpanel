@@ -1,0 +1,81 @@
+/* Buat Gmail (HP): strip status, pemilih run, log live. Warna mengikuti
+   panel gelap ui.css; hijau #34A853 = identitas Gmail, dipakai di grup sidebar. */
+.bgm-status { padding: 4px 16px; }
+.bgm-row {
+  display: flex;
+  gap: 14px;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, .06);
+  align-items: baseline;
+}
+.bgm-row:last-child { border-bottom: 0; padding-bottom: 6px; }
+.bgm-k {
+  flex: none;
+  width: 92px;
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: #8b93a3;
+}
+.bgm-v { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13.5px; }
+.bgm-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.bgm-dot.ok { background: #2ec478; }
+.bgm-dot.off { background: #eb5757; }
+
+.bgm-form { margin-top: 14px; padding: 16px; display: grid; gap: 13px; }
+.bgm-opt { display: flex; gap: 14px; align-items: flex-start; }
+.bgm-opt .bgm-k { padding-top: 9px; }
+.bgm-seg { display: flex; gap: 8px; flex-wrap: wrap; }
+.bgm-segbtn {
+  position: relative;
+  border: 1px solid rgba(255, 255, 255, .14);
+  border-radius: 9px;
+  padding: 8px 13px;
+  font-size: 13px;
+  cursor: pointer;
+  color: #c9cfdb;
+  user-select: none;
+}
+.bgm-segbtn:hover { border-color: rgba(255, 255, 255, .3); }
+.bgm-segbtn.on { border-color: #34A853; color: #7ee2a8; background: rgba(52, 168, 83, .12); }
+.bgm-segbtn input { position: absolute; opacity: 0; pointer-events: none; }
+/* R-32: radio tersembunyi tetap tercapai Tab dan punya indikator fokus. */
+.bgm-segbtn:has(input:focus-visible) { outline: 2px solid #57d99a; outline-offset: 2px; }
+.bgm-note { margin: 0; font-size: 12.5px; color: #8b93a3; }
+.bgm-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.bgm-reason { font-size: 12.5px; color: #8b93a3; }
+
+.bgm-live { margin-top: 14px; padding: 16px; }
+.bgm-live-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+.bgm-log {
+  margin: 0;
+  padding: 12px;
+  max-height: 320px;
+  overflow: auto;
+  background: rgba(0, 0, 0, .25);
+  border: 1px solid rgba(255, 255, 255, .08);
+  border-radius: 10px;
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: #c9cfdb;
+}
+
+@media (max-width: 640px) {
+  .bgm-opt, .bgm-row { flex-direction: column; gap: 6px; }
+  .bgm-k { width: auto; }
+  .bgm-opt .bgm-k { padding-top: 0; }
+  .bgm-live-head { flex-direction: column; }
+  .bgm-log { max-height: 240px; }
+  /* R-03: target sentuh minimum 44px di layar sentuh. */
+  .bgm-segbtn { min-height: 44px; display: inline-flex; align-items: center; }
+  .bgm-actions .btn-primary, .bgm-live-head .btn-danger-ghost { min-height: 44px; }
+}

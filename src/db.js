@@ -224,6 +224,94 @@ async function load() {
       created_at TEXT DEFAULT (datetime('now')),
       FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE
     );
+
+    CREATE TABLE IF NOT EXISTS account_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      account_id INTEGER NOT NULL,
+      platform TEXT NOT NULL,
+      event TEXT NOT NULL,
+      reason TEXT,
+      source TEXT,
+      url TEXT,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS gmail_login_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      gmail_id INTEGER NOT NULL,
+      mode TEXT,
+      result TEXT,
+      detail TEXT,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS smm_comment_orders (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      post_url TEXT NOT NULL,
+      target_comments INTEGER NOT NULL,
+      completed_comments INTEGER DEFAULT 0,
+      comment_text TEXT,
+      status TEXT DEFAULT 'pending',
+      platform TEXT DEFAULT 'fb',
+      created_at TEXT DEFAULT (datetime('now')),
+      completed_at TEXT,
+      cancelled_at TEXT,
+      ai_context INTEGER DEFAULT 1
+    );
+
+    CREATE TABLE IF NOT EXISTS smm_comment_executions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      order_id INTEGER NOT NULL REFERENCES smm_comment_orders(id),
+      account_id INTEGER NOT NULL REFERENCES accounts(id),
+      status TEXT DEFAULT 'pending',
+      comment_text TEXT,
+      executed_at TEXT,
+      error_message TEXT,
+      retry_count INTEGER DEFAULT 0
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_cmt_executions_order_status ON smm_comment_executions(order_id, status);
+
+    CREATE TABLE IF NOT EXISTS analytics_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      event_type TEXT NOT NULL,
+      entity_type TEXT,
+      entity_id INTEGER,
+      account_id INTEGER REFERENCES accounts(id),
+      metadata TEXT,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_analytics_type_date ON analytics_events(event_type, created_at);
+
+    CREATE TABLE IF NOT EXISTS error_recovery_queue (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      entity_type TEXT NOT NULL,
+      entity_id INTEGER NOT NULL,
+      action TEXT NOT NULL,
+      retry_count INTEGER DEFAULT 0,
+      max_retries INTEGER DEFAULT 3,
+      next_retry_at TEXT,
+      status TEXT DEFAULT 'pending',
+      created_at TEXT DEFAULT (datetime('now')),
+      last_error TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_error_recovery_status ON error_recovery_queue(status, next_retry_at);
+
+    CREATE TABLE IF NOT EXISTS health_check_history (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      account_id INTEGER NOT NULL REFERENCES accounts(id),
+      check_type TEXT NOT NULL,
+      status TEXT NOT NULL,
+      checked_at TEXT DEFAULT (datetime('now')),
+      error_message TEXT,
+      response_time INTEGER
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_health_check_account ON health_check_history(account_id);
+    CREATE INDEX IF NOT EXISTS idx_health_check_date ON health_check_history(checked_at);
   `);
 
   db.run('PRAGMA foreign_keys = ON');
@@ -317,6 +405,28 @@ async function load() {
   if (!proxy_cols.includes('source')) {
     db.run(`ALTER TABLE proxies ADD COLUMN source TEXT`);
   }
+
+  // Migrasi: kolom sesi, sidik jari, dan TOTP di accounts — dipakai login & cek kode 2FA.
+  const tambah = (tabel, kolom, tipe) => {
+    const ada = query(`PRAGMA table_info(${tabel})`).map((c) => c.name);
+    if (!ada.includes(kolom)) db.run(`ALTER TABLE ${tabel} ADD COLUMN ${kolom} ${tipe}`);
+  };
+  tambah('accounts', 'session_created_at', 'TEXT');
+  tambah('accounts', 'session_expires_at', 'TEXT');
+  tambah('accounts', 'last_activity_at', 'TEXT');
+  tambah('accounts', 'fingerprint_json', 'TEXT');
+  tambah('accounts', 'totp_secret_enc', 'TEXT');
+  tambah('accounts', 'totp_locked', 'INTEGER DEFAULT 0');
+  // Migrasi: status & TOTP di pool Gmail supaya login ulang tidak perlu isi kode manual.
+  tambah('gmail_pool', 'totp_secret_enc', 'TEXT');
+  tambah('gmail_pool', 'totp_locked', 'INTEGER DEFAULT 0');
+  tambah('gmail_pool', 'login_status', 'TEXT');
+  tambah('gmail_pool', 'login_at', 'TEXT');
+  // Migrasi: alasan gagal & jenis challenge dicatat per percobaan signup.
+  tambah('signup_history', 'fail_reason', 'TEXT');
+  tambah('signup_history', 'challenge', 'TEXT');
+  // Migrasi: penanda akun warming yang menunggu persetujuan operator.
+  tambah('warming_accounts', 'needs_approval', 'INTEGER DEFAULT 0');
 
   // Create indexes untuk optimasi query performance
   try {
@@ -653,18 +763,70 @@ async function phoneHealthTrend() {
 }
 
 // ---- signup_history (IP yang sudah dipakai untuk signup — penanda jangan dipakai lagi) ----
-async function addSignupHistory({ ip, platform, username, status, proxy, emailDomain }) {
+async function addSignupHistory({ ip, platform, username, status, proxy, emailDomain, failReason, challenge }) {
   await waitReady();
   // Kolom ip NOT NULL — jalur CLI tanpa TT_BIRTH_IP menyimpan string kosong.
   db.run(
-    `INSERT INTO signup_history (ip, platform, username, status, proxy, email_domain) VALUES (?, ?, ?, ?, ?, ?)`,
-    [ip || '', platform || 'ig', username || null, status || 'unknown', proxy || null, emailDomain || null]
+    `INSERT INTO signup_history (ip, platform, username, status, proxy, email_domain, fail_reason, challenge) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [ip || '', platform || 'ig', username || null, status || 'unknown', proxy || null, emailDomain || null, failReason ? String(failReason).slice(0, 500) : null, challenge || null]
   );
   save();
 }
 
+// ---- account_events (bukti teks platform saat checkpoint/suspend/penolakan) ----
+async function addAccountEvent({ accountId, platform, event, reason, source, url }) {
+  await waitReady();
+  db.run(
+    `INSERT INTO account_events (account_id, platform, event, reason, source, url) VALUES (?, ?, ?, ?, ?, ?)`,
+    [Number(accountId) || 0, platform || 'fb', event || 'event', reason ? String(reason).slice(0, 500) : null, source || null, url || null]
+  );
+  save();
+}
+
+async function listAccountEvents(accountId, limit = 50) {
+  await waitReady();
+  return query(`SELECT * FROM account_events WHERE account_id = ? ORDER BY id DESC LIMIT ?`, [Number(accountId), limit]);
+}
+
 // Jumlah signup via satu IP dalam 24 jam terakhir (success/partial dihitung;
 // failed juga dihitung karena kegagalan pun membakar reputasi IP di sisi FB).
+// Identitas kamar DataImpulse dari string proxy (…sid.perm-N:…). Null bila bukan
+// DataImpulse — guard kamar hanya berlaku untuk pool kamar, bukan IP asli/Bright Data.
+function dataimpulseRoom(proxyStr) {
+  const m = /sid\.perm-(\d+)/.exec(String(proxyStr || ''));
+  return m ? `perm-${m[1]}` : null;
+}
+
+// Akun FB yang BERHASIL lahir via kamar ini dalam 24 jam — dasar guard
+// "satu kamar satu kelahiran FB per hari" (pelajaran 14/10: 2 attempt + 1
+// success dalam 33 menit di kamar Perm-N yang dipakai IG pagi → suspend).
+function countFbSignups24hByRoom(proxyStr) {
+  const room = dataimpulseRoom(proxyStr);
+  if (!room) return 0;
+  return query(
+    `SELECT COUNT(*) as count FROM signup_history
+     WHERE platform = 'fb' AND status = 'success'
+       AND proxy LIKE '%sid.' || ? || ':%'
+       AND created_at >= datetime('now', '-1 day')`,
+    [room]
+  )[0].count;
+}
+
+// Kamar ini dipakai signup platform LAIN dalam 12 jam terakhir (apa pun status)?
+// Semakin baru, semakin panas reputasi backbone-nya — FB paling melar.
+function otherPlatformRoomUse12h(proxyStr, platform) {
+  const room = dataimpulseRoom(proxyStr);
+  if (!room) return null;
+  const rows = query(
+    `SELECT platform, MAX(created_at) as at, COUNT(*) as n FROM signup_history
+     WHERE proxy LIKE '%sid.' || ? || ':%' AND platform != ?
+       AND created_at >= datetime('now', '-12 hours')
+     GROUP BY platform`,
+    [room, platform]
+  );
+  return rows.length ? rows : null;
+}
+
 function countSignups24h(ip) {
   if (!ip) return 0;
   return query(
@@ -907,11 +1069,265 @@ async function getLikeJob(id) {
   return query(`SELECT * FROM like_jobs WHERE id = ?`, [id])[0] || null;
 }
 
+// ---- SMM Comment Orders (Auto Komentar) ----
+// Satu eksekusi = satu komentar dari satu akun. Akun diikat saat order dibuat
+// (supaya target langsung terkunci ke jumlah akun aktif), lalu runner boleh
+// memindahkannya ke akun sehat lain yang belum dipakai di order ini.
+async function createSmmCommentOrder({ name, postUrl, targetComments, platform = 'fb', commentText = null, aiContext = true }) {
+  return transaction(async () => {
+    const accounts = query(
+      `SELECT id FROM accounts WHERE platform = ? AND status = 'active' ORDER BY id`,
+      [platform]
+    );
+    if (accounts.length === 0) throw new Error('Tidak ada akun aktif untuk platform ' + platform);
+    if (targetComments > accounts.length) {
+      throw new Error(`Target ${targetComments} komentar melebihi jumlah akun aktif (${accounts.length} akun). Satu akun hanya bisa komentar 1x di postingan yang sama.`);
+    }
+    db.run(
+      `INSERT INTO smm_comment_orders (name, post_url, target_comments, platform, comment_text, ai_context) VALUES (?, ?, ?, ?, ?, ?)`,
+      [name, postUrl, targetComments, platform, commentText ? String(commentText).slice(0, 1000) : null, aiContext ? 1 : 0]
+    );
+    const orderId = lastInsertId();
+    for (let i = 0; i < targetComments; i++) {
+      db.run(`INSERT INTO smm_comment_executions (order_id, account_id) VALUES (?, ?)`, [orderId, accounts[i].id]);
+    }
+    return orderId;
+  });
+}
+
+async function listSmmCommentOrders(status = null) {
+  await waitReady();
+  const where = status ? 'WHERE o.status = ?' : '';
+  const params = status ? [status] : [];
+  return query(`
+    SELECT
+      o.*,
+      COUNT(e.id) as total_executions,
+      SUM(CASE WHEN e.status = 'completed' THEN 1 ELSE 0 END) as completed_count,
+      SUM(CASE WHEN e.status = 'failed' THEN 1 ELSE 0 END) as failed_count
+    FROM smm_comment_orders o
+    LEFT JOIN smm_comment_executions e ON e.order_id = o.id
+    ${where}
+    GROUP BY o.id
+    ORDER BY o.created_at DESC, o.id DESC
+  `, params);
+}
+
+async function getSmmCommentOrder(id) {
+  await waitReady();
+  const order = query(`SELECT * FROM smm_comment_orders WHERE id = ?`, [id])[0];
+  if (!order) return null;
+  const executions = query(`
+    SELECT e.*, a.name as account_name, a.email as account_email
+    FROM smm_comment_executions e
+    JOIN accounts a ON a.id = e.account_id
+    WHERE e.order_id = ?
+    ORDER BY e.id
+  `, [id]);
+  return { ...order, executions };
+}
+
+async function getPendingSmmCommentExecutions(orderId, limit = 10) {
+  await waitReady();
+  return query(`
+    SELECT e.*, a.name as account_name, a.email, a.password_enc, a.browser_profile_dir, a.proxy, a.platform
+    FROM smm_comment_executions e
+    JOIN accounts a ON a.id = e.account_id
+    WHERE e.order_id = ? AND e.status = 'pending'
+    ORDER BY e.id
+    LIMIT ?
+  `, [orderId, limit]);
+}
+
+// Eksekusi bisa dipindah ke akun lain saat akun terikatnya gagal gate.
+async function assignSmmCommentExecutionAccount(executionId, accountId) {
+  await waitReady();
+  db.run(`UPDATE smm_comment_executions SET account_id = ? WHERE id = ?`, [accountId, executionId]);
+  save();
+}
+
+// Eksekusi 'running' yang tertinggal dari proses mati dikembalikan ke antrean.
+async function resetRunningSmmCommentExecutions(orderId) {
+  await waitReady();
+  db.run(`UPDATE smm_comment_executions SET status = 'pending' WHERE order_id = ? AND status = 'running'`, [orderId]);
+  save();
+}
+
+// Jalankan ulang setelah gagal: eksekusi yang gagal kembali ke antrean supaya
+// akun lain bisa mencoba (mis. akun lama kena gate, bukan postingannya mati).
+async function resetFailedSmmCommentExecutions(orderId) {
+  await waitReady();
+  db.run(`UPDATE smm_comment_executions SET status = 'pending', error_message = NULL WHERE order_id = ? AND status = 'failed'`, [orderId]);
+  save();
+}
+
+async function markSmmCommentExecutionRunning(executionId) {
+  await waitReady();
+  db.run(`UPDATE smm_comment_executions SET status = 'running' WHERE id = ?`, [executionId]);
+  save();
+}
+
+async function updateSmmCommentExecution(executionId, status, errorMessage = null, commentText = null) {
+  await waitReady();
+  const exec = query(`SELECT retry_count, order_id FROM smm_comment_executions WHERE id = ?`, [executionId])[0];
+  if (!exec) return;
+  const retryCount = (exec.retry_count || 0) + (status === 'failed' ? 1 : 0);
+  db.run(
+    `UPDATE smm_comment_executions
+     SET status = ?, executed_at = datetime('now'), error_message = ?, retry_count = ?, comment_text = COALESCE(?, comment_text)
+     WHERE id = ?`,
+    [status, errorMessage, retryCount, commentText, executionId]
+  );
+
+  const completed = query(
+    `SELECT COUNT(*) as cnt FROM smm_comment_executions WHERE order_id = ? AND status = 'completed'`,
+    [exec.order_id]
+  )[0].cnt;
+  const order = query(`SELECT target_comments, status FROM smm_comment_orders WHERE id = ?`, [exec.order_id])[0];
+  if (!order || order.status === 'cancelled') { save(); return; }
+  const pending = query(
+    `SELECT COUNT(*) as cnt FROM smm_comment_executions WHERE order_id = ? AND status IN ('pending', 'running')`,
+    [exec.order_id]
+  )[0].cnt;
+  const nextStatus = completed >= order.target_comments ? 'completed' : pending === 0 ? 'failed' : 'running';
+  db.run(
+    `UPDATE smm_comment_orders
+     SET completed_comments = ?, status = ?, completed_at = CASE WHEN ? >= target_comments THEN datetime('now') ELSE NULL END
+     WHERE id = ?`,
+    [completed, nextStatus, completed, exec.order_id]
+  );
+  save();
+}
+
+async function setSmmCommentOrderStatus(id, status) {
+  await waitReady();
+  db.run(`UPDATE smm_comment_orders SET status = ? WHERE id = ? AND status <> 'cancelled'`, [status, id]);
+  save();
+}
+
+async function cancelSmmCommentOrder(id) {
+  await waitReady();
+  db.run(`UPDATE smm_comment_orders SET status = 'cancelled', cancelled_at = datetime('now') WHERE id = ?`, [id]);
+  db.run(`UPDATE smm_comment_executions SET status = 'cancelled' WHERE order_id = ? AND status IN ('pending', 'running')`, [id]);
+  save();
+}
+
+async function deleteSmmCommentOrder(id) {
+  await waitReady();
+  db.run(`DELETE FROM smm_comment_executions WHERE order_id = ?`, [id]);
+  db.run(`DELETE FROM smm_comment_orders WHERE id = ?`, [id]);
+  save();
+}
+
 // ---- proxies ----
 async function addProxy(value) {
   await waitReady();
   db.run(`INSERT OR IGNORE INTO proxies (value) VALUES (?)`, [value]);
   save();
+}
+
+// Label provider (mis. "Bright Data ISP") untuk dropdown create — kolom sudah
+// ada di schema, addProxy lama tidak menyimpannya (2026-10-10).
+async function setProxyLabel(value, label) {
+  await waitReady();
+  db.run(`UPDATE proxies SET label = ? WHERE value = ?`, [String(label).slice(0, 60), String(value).trim()]);
+  save();
+}
+
+// ---- Alokasi IP lahir otomatis (1 signup = 1 IP tetap) ----
+const ipOfProxy = (value) => (/-ip-(\d+\.\d+\.\d+\.\d+)/i.exec(String(value || '')) || [])[1] || '';
+
+// IP dianggap bersih hanya bila belum pernah muncul di riwayat signup, riwayat
+// probe akun, maupun proxy yang sudah dipatok ke IP itu. Semua status dihitung:
+// percobaan gagal ikut membakar reputasi IP.
+async function countIpUses(ip) {
+  await waitReady();
+  if (!ip) return 0;
+  const row = query(
+    `SELECT
+       (SELECT COUNT(*) FROM signup_history WHERE ip = ?) +
+       (SELECT COUNT(*) FROM ip_history WHERE ip = ?) +
+       (SELECT COUNT(*) FROM proxies WHERE value LIKE ? OR label LIKE ?) AS n`,
+    [ip, ip, `%-ip-${ip}:%`, `%${ip}%`]
+  )[0];
+  return Number(row && row.n) || 0;
+}
+
+// Baris proxy hasil alokasi: status 'reserved' sampai akunnya lahir.
+async function addAutoProxy(value, ip) {
+  await waitReady();
+  const label = `auto · IP ${ip}`;
+  db.run(`INSERT OR IGNORE INTO proxies (value, label, source, status) VALUES (?, ?, 'auto-ip', 'reserved')`, [value, label]);
+  db.run(
+    `UPDATE proxies SET label = ?, source = 'auto-ip', status = 'reserved', last_tested_at = datetime('now') WHERE value = ?`,
+    [label, value]
+  );
+  save();
+  return query(`SELECT * FROM proxies WHERE value = ?`, [value])[0] || null;
+}
+
+// Ikat permanen: label memuat nama akun + IP, dan barisnya tidak dihapus saat
+// akun memakai proxy ini. accounts.proxy menyimpan string yang sama.
+async function bindAutoProxy(value, accountName) {
+  await waitReady();
+  if (!value) return;
+  const ip = ipOfProxy(value);
+  const label = `akun ${String(accountName || 'baru').slice(0, 40)}${ip ? ' · IP ' + ip : ''}`;
+  db.run(`UPDATE proxies SET status = 'active', label = ? WHERE value = ?`, [label, value]);
+  save();
+}
+
+// Run benar-benar dimulai: baris tidak boleh dianggap "alokasi menganggur" lagi,
+// walau operator menghentikannya sebelum akun lahir. IP yang sudah terlihat IG
+// tetap tidak dialokasikan ulang.
+async function markAutoProxyAttempt(value) {
+  await waitReady();
+  if (!value) return;
+  const ip = ipOfProxy(value);
+  db.run(
+    `UPDATE proxies SET label = ? WHERE value = ? AND source = 'auto-ip' AND status = 'reserved'`,
+    [`upaya signup${ip ? ' · IP ' + ip : ''}`, value]
+  );
+  save();
+}
+
+// Signup gagal = IP sudah terbakar. Baris tetap disimpan sebagai jejak agar IP
+// itu tidak pernah dialokasikan lagi.
+async function burnAutoProxy(value) {
+  await waitReady();
+  if (!value) return;
+  const ip = ipOfProxy(value);
+  db.run(`UPDATE proxies SET status = 'burned', label = ? WHERE value = ?`, [`bekas signup${ip ? ' · IP ' + ip : ''}`, value]);
+  save();
+}
+
+// Alokasi batal sebelum browser jalan: baris reserved boleh dibuang lagi.
+async function releaseAutoProxy(value) {
+  await waitReady();
+  if (!value) return;
+  db.run(
+    `DELETE FROM proxies WHERE value = ? AND source = 'auto-ip' AND status = 'reserved'
+       AND value NOT IN (SELECT proxy FROM accounts WHERE proxy IS NOT NULL)`, [value]
+  );
+  save();
+}
+
+// Reserved yang ditinggal SEBELUM run dimulai (server mati di tengah alokasi)
+// jangan menahan IP selamanya. Baris yang sudah dipakai run tetap disimpan.
+async function releaseStaleAutoProxies() {
+  await waitReady();
+  db.run(
+    `DELETE FROM proxies WHERE source = 'auto-ip' AND status = 'reserved'
+       AND label LIKE 'auto · IP %'
+       AND created_at < datetime('now', '-6 hours')
+       AND value NOT IN (SELECT proxy FROM accounts WHERE proxy IS NOT NULL)`, []
+  );
+  save();
+}
+
+async function accountsUsingProxy(value) {
+  await waitReady();
+  return query(`SELECT id, name, platform FROM accounts WHERE proxy = ?`, [String(value)]);
 }
 
 async function listProxies() {
@@ -921,7 +1337,16 @@ async function listProxies() {
 
 async function deleteProxy(id) {
   await waitReady();
-  db.run(`DELETE FROM proxies WHERE id = ? AND value NOT IN (SELECT proxy FROM accounts WHERE proxy IS NOT NULL)`, [id]);
+  // Pelajaran 2026-10-10: guard lama menolak bila proxies.value masih ditulis
+  // di accounts.proxy (AKTIF/MATI sama-sama) — tapi selalu ok:true tanpa pesan,
+  // operator belum jogja tahu kenapa row tak hilang (bug diam-diam).
+  // Sekarang: value masih dipakai accounts → null-kan di accounts dulu supaya
+  // hapus tak memutus login lama, karena proxy table ini hanya daftar pilihan
+  // dropdown — baris accounts punya proxy string sendiri yang dipakai runner.
+  const row = query('SELECT value FROM proxies WHERE id = ?', [id])[0];
+  if (!row) return;
+  db.run('UPDATE accounts SET proxy = NULL WHERE proxy = ?', [row.value]);
+  db.run('DELETE FROM proxies WHERE id = ?', [id]);
   save();
 }
 
@@ -978,7 +1403,11 @@ async function setAccountProxy(accountId, proxyValue) {
 // overwrite=true : timpa proxy semua akun sesuai urutan (re-assign).
 async function assignProxiesToAccounts({ overwrite = false } = {}) {
   await waitReady();
-  const proxs = query(`SELECT value FROM proxies ORDER BY id`);
+  // Proxy hasil alokasi otomatis sudah milik satu akun — jangan pernah dibagikan
+  // ulang ke akun lain hanya karena urutan id. Proxy bekas signup juga dilewati.
+  const taken = new Set(query(`SELECT proxy FROM accounts WHERE proxy IS NOT NULL AND proxy != ''`).map((r) => r.proxy));
+  const proxs = query(`SELECT value FROM proxies WHERE COALESCE(source, '') != 'auto-ip' AND COALESCE(status, '') != 'burned' ORDER BY id`)
+    .filter((p) => !taken.has(p.value));
   const accounts = query(`SELECT id FROM accounts ORDER BY id`);
   let assigned = 0;
   accounts.forEach((acc, i) => {
@@ -1061,13 +1490,39 @@ async function transaction(callback) {
 // ---- gmail_pool ----
 // Stok Gmail fresh untuk AutoCreate. Password disimpan terenkripsi (format
 // crypto.encrypt, sama dengan tabel accounts). status: available | used.
-async function addGmail({ email, password, source = 'manual' }) {
+async function addGmail({ email, password, source = 'manual', totpSecret }) {
   await waitReady();
   const em = String(email || '').trim().toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) throw new Error('email tidak valid');
   const pw = String(password || '');
   if (!pw) throw new Error('password kosong');
-  db.run(`INSERT INTO gmail_pool (email, password_enc, source) VALUES (?, ?, ?)`, [em, crypto.encrypt(pw), source]);
+  // Secret tak valid menggagalkan barisnya, bukan diam-diam masuk tanpa 2FA:
+  // akun belian yang secret-nya hilang jadi tak terkendali.
+  const secretB32 = totpSecret ? totp.normalizeSecret(totpSecret) : null;
+  if (totpSecret && !secretB32) throw new Error('secret 2FA tidak valid');
+  // Dedupe email di level app (bukan hanya UNIQUE constraint): baris duplikat
+  // dengan status berbeda dianggap baris yang sama. Yang menang baris TERBARU —
+  // dipakai dulu (`used`) = email lama tak boleh kembali muncul `available`
+  // (pelajaran 2026-10-14: duplikat 'available' + 'used' dipakai 2x sehari).
+  const existing = query(`SELECT id, status FROM gmail_pool WHERE lower(email) = ?`, [em]);
+  if (existing.length) {
+    const newest = existing.reduce((a, b) => (Number(b.id) > Number(a.id) ? b : a));
+    db.run(`UPDATE gmail_pool SET password_enc = ?, source = ?, status = ?, totp_secret_enc = COALESCE(?, totp_secret_enc) WHERE id = ?`,
+      [crypto.encrypt(pw), source, String(newest.status) === 'used' ? 'used' : 'available',
+       secretB32 ? crypto.encrypt(secretB32) : null, Number(newest.id)]);
+    if (existing.length > 1) {
+      const orphanIds = existing.filter((s) => Number(s.id) !== Number(newest.id)).map((s) => Number(s.id));
+      db.run(`DELETE FROM gmail_pool WHERE id IN (${orphanIds.map(() => '?').join(',')})`, orphanIds);
+      console.log('[GMAIL] dedupe: ' + em + ' — ' + (existing.length - 1) + ' baris duplikat dihapus, status memegang "' + newest.status + '" (terbaru id #' + newest.id + ')');
+    }
+    save();
+    // Selalu balikkan id baris yang LIVE (newest): di jalur UPDATE, last_insert_rowid()
+    // memegang nilai INSERT terakhir yang tak relevan — minta ulang dari DB.
+    const live = query(`SELECT id FROM gmail_pool WHERE lower(email) = ?`, [em]);
+    return live.length ? Number(live[0].id) : Number(newest.id);
+  }
+  db.run(`INSERT INTO gmail_pool (email, password_enc, source, totp_secret_enc) VALUES (?, ?, ?, ?)`,
+    [em, crypto.encrypt(pw), source, secretB32 ? crypto.encrypt(secretB32) : null]);
   const id = lastInsertId();
   save();
   return id;
@@ -1076,7 +1531,9 @@ async function addGmail({ email, password, source = 'manual' }) {
 async function listGmail(limit = 100) {
   await waitReady();
   return query(
-    `SELECT id, email, status, source, used_at, used_by, created_at
+    `SELECT id, email, status, source, used_at, used_by, created_at,
+            totp_secret_enc IS NOT NULL AND totp_secret_enc != '' AS has_totp,
+            totp_locked, login_status, login_at
      FROM gmail_pool ORDER BY id DESC LIMIT ?`,
     [Math.min(Number(limit) || 100, 500)]
   );
@@ -1096,6 +1553,32 @@ async function claimGmail(platform) {
   return { id: r.id, email: r.email, password: pw };
 }
 
+// Gmail dipakai utk platform apa saja: pieces 'platform:nama' dipisah ' | '
+// (mis. 'fb:pocotre76 | ig:sinta.surya57'). Satu Gmail boleh dipakai SEKALI
+// per platform (FB daftar pakai Gmail, IG juga boleh pakai Gmail yang sama) —
+// pencegahan dobel-dukun dibaca dari daftar platform di sini.
+function gmailUsedPlatforms(usedBy) {
+  return String(usedBy || '').split('|')
+    .map((piece) => (piece.split(':')[0] || '').trim().toLowerCase())
+    .filter(Boolean);
+}
+
+// Tandai satu Gmail pool sebagai terpakai utk platform tertentu (+ nama akun).
+// Dipakai jalur FB & IG create ketika operator memilih Gmail manual (bukan FIFO
+// claim). used_by disusun ulang tanpa menghapus sejarah platform lain:
+// 'fb:pocotre76' + mark('ig','sinta…') → 'fb:pocotre76 | ig:sinta…'.
+async function markGmailUsed(id, platform, accountName) {
+  await waitReady();
+  const plt = platform || 'fb';
+  const rows = query(`SELECT used_by FROM gmail_pool WHERE id = ?`, [Number(id) || 0]);
+  const existing = rows.length ? String(rows[0].used_by || '') : '';
+  const pieces = existing.split('|').map((s) => s.trim()).filter(Boolean)
+    .filter((p) => (p.split(':')[0] || '').trim().toLowerCase() !== plt);
+  pieces.push(accountName ? `${plt}:${accountName}` : plt);
+  db.run(`UPDATE gmail_pool SET status = 'used', used_at = datetime('now'), used_by = ? WHERE id = ?`, [pieces.join(' | '), Number(id) || 0]);
+  save();
+}
+
 async function gmailStats() {
   await waitReady();
   const s = { total: 0, available: 0, used: 0 };
@@ -1107,18 +1590,97 @@ async function gmailStats() {
   return s;
 }
 
+// Simpan hasil login Gmail satu akun pool (dipanggil modul gmail-login).
+async function setGmailLoginStatus(id, loginStatus, loginAt) {
+  await waitReady();
+  db.run(`UPDATE gmail_pool SET login_status = ?, login_at = ? WHERE id = ?`,
+    [String(loginStatus || ''), loginAt ? String(loginAt) : null, Number(id) || 0]);
+  save();
+}
+
+// Riwayat percobaan login per akun pool: satu baris per run (waktu, mode, hasil,
+// detail pendek mis. nomor konfirmasi). Mode dari job, bukan tebakan.
+async function addGmailLoginLog(gmailId, mode, result, detail) {
+  await waitReady();
+  db.run(`INSERT INTO gmail_login_log (gmail_id, mode, result, detail) VALUES (?, ?, ?, ?)`,
+    [Number(gmailId) || 0, String(mode || ''), String(result || ''),
+     detail ? String(detail).slice(0, 200) : null]);
+  // Simpan 30 percobaan terakhir per akun: riwayat, bukan arsip.
+  db.run(`DELETE FROM gmail_login_log WHERE gmail_id = ? AND id NOT IN
+    (SELECT id FROM gmail_login_log WHERE gmail_id = ? ORDER BY id DESC LIMIT 30)`,
+    [Number(gmailId) || 0, Number(gmailId) || 0]);
+  save();
+}
+
+async function listGmailLoginLog(gmailId, limit = 10) {
+  await waitReady();
+  return query(`SELECT mode, result, detail, created_at FROM gmail_login_log
+    WHERE gmail_id = ? ORDER BY id DESC LIMIT ?`, [Number(gmailId) || 0, Math.min(Number(limit) || 10, 30)]);
+}
+
+// Kode TOTP on-demand untuk satu akun pool: panel jadi Google Authenticator-nya.
+// Secret hanya didekripsi di RAM saat menghitung, tidak pernah dikirim keluar.
+async function gmailTotpCode(id) {
+  await waitReady();
+  const rows = query(`SELECT id, totp_secret_enc, totp_locked FROM gmail_pool WHERE id = ?`, [Number(id) || 0]);
+  if (!rows.length) return { error: 'tidak_ditemukan' };
+  const r = rows[0];
+  if (r.totp_locked) return { error: 'totp_seller' };
+  if (!r.totp_secret_enc) return { error: 'tanpa_totp' };
+  let secret;
+  try { secret = crypto.decrypt(r.totp_secret_enc); } catch (e) { return { error: 'secret_rusak' }; }
+  return { id: r.id, ...totp.totpCode(secret) };
+}
+
+// 2FA akun panel (paritas gmailTotpCode): simpan kunci baru (replace bila sudah
+// ada — re-setup), ambil kode saat ini. Secret tak valid menggagalkan simpan: kunci
+// salah yang diam-diam masuk jadi kegagalan login yang sulit dilacak.
+async function setAccountTotp(id, totpSecret) {
+  await waitReady();
+  const idN = Number(id) || 0;
+  const rows = query(`SELECT id FROM accounts WHERE id = ?`, [idN]);
+  if (!rows.length) return { error: 'tidak_ditemukan' };
+  if (totpSecret === null) {
+    db.run(`UPDATE accounts SET totp_secret_enc = NULL, totp_locked = 0 WHERE id = ?`, [idN]);
+    save();
+    return { id: idN, removed: true };
+  }
+  // Kunci valid wajib terbukti menghitung kode sebelum disimpan — validasi format
+  // saja tidak menangkap kunci salah-ketik yang kebetulan lolos regex base32.
+  const secretB32 = totp.normalizeSecret(totpSecret);
+  if (!secretB32) return { error: 'kunci_tidak_valid (harus base32 / otpauth://)' };
+  try { totp.totpCode(secretB32); } catch (e) { return { error: 'kunci_tak_bisa_dihitung: ' + e.message }; }
+  db.run(`UPDATE accounts SET totp_secret_enc = ?, totp_locked = 0 WHERE id = ?`, [crypto.encrypt(secretB32), idN]);
+  save();
+  return { id: idN, set: true, has_totp: true };
+}
+
+async function accountTotpCode(id) {
+  await waitReady();
+  const rows = query(`SELECT id, totp_secret_enc, totp_locked FROM accounts WHERE id = ?`, [Number(id) || 0]);
+  if (!rows.length) return { error: 'tidak_ditemukan' };
+  const r = rows[0];
+  if (r.totp_locked) return { error: 'totp_locked' };
+  if (!r.totp_secret_enc) return { error: 'tanpa_totp' };
+  let secret;
+  try { secret = crypto.decrypt(r.totp_secret_enc); } catch (e) { return { error: 'secret_rusak' }; }
+  return { id: r.id, ...totp.totpCode(secret) };
+}
+
 // Impor massal dari teks: JSON array (output Gmail Creator Pro) atau baris
-// email|sandi. Duplikat / tak valid dihitung skipped, bukan menggagalkan semua.
-async function importGmailText(text) {
+// email|sandi[|secret]. Kolom ketiga = secret 2FA (base32 / URL otpauth://).
+// Duplikat / tak valid dihitung skipped, bukan menggagalkan semua.
+async function importGmailText(text, source = 'manual') {
+  const src = ['manual', 'belian'].includes(source) ? source : 'manual';
   const t = String(text || '').trim();
-  const res = { added: 0, skipped: 0 };
+  const res = { added: 0, skipped: 0, details: [] };
   if (!t) return res;
   const entries = [];
   if (t.startsWith('[') || t.startsWith('{')) {
     try {
       const j = JSON.parse(t);
       const arr = Array.isArray(j) ? j : (Array.isArray(j.accounts) ? j.accounts : [j]);
-      for (const e of arr) entries.push({ email: e.email || e.mail || e.gmail, password: e.password || e.pass });
+      for (const e of arr) entries.push({ email: e.email || e.mail || e.gmail, password: e.password || e.pass, secret: e.secret || e.totp_secret || e.totp });
     } catch (e) { /* bukan JSON valid: jatuh ke mode baris */ }
   }
   if (!entries.length) {
@@ -1126,13 +1688,20 @@ async function importGmailText(text) {
       line = line.trim();
       if (!line || line.startsWith('#')) continue;
       const m = line.split(/[|,;]/).map((x) => x.trim());
-      if (m.length >= 2) entries.push({ email: m[0], password: m[1] });
+      if (m.length >= 2) entries.push({ email: m[0], password: m[1], secret: m[2] });
       else if (m.length === 1 && m[0].includes('@')) entries.push({ email: m[0], password: '' });
+      else { res.skipped++; res.details.push({ email: m[0] || '(tanpa email)', reason: 'format salah, pakai email|sandi[|secret]' }); }
     }
   }
   for (const e of entries) {
-    try { await addGmail({ email: e.email, password: e.password, source: 'manual' }); res.added++; }
-    catch (err) { res.skipped++; }
+    try { await addGmail({ email: e.email, password: e.password, source: src, totpSecret: e.secret }); res.added++; }
+    catch (err) {
+      res.skipped++;
+      // Alasan per baris ikut dikirim supaya operator tahu kenapa tidak masuk.
+      let reason = err && err.message ? err.message : 'gagal menyimpan';
+      if (/unique constraint/i.test(reason)) reason = 'email sudah ada di stok';
+      res.details.push({ email: String(e.email || '').trim() || '(tanpa email)', reason });
+    }
   }
   save();
   return res;
@@ -1187,7 +1756,12 @@ module.exports = {
   phoneHealthTrend,
   getLatestVerdicts,
   addSignupHistory,
+  addAccountEvent,
+  listAccountEvents,
   countSignups24h,
+  dataimpulseRoom,
+  countFbSignups24hByRoom,
+  otherPlatformRoomUse12h,
   countSignupAttempts24hByIp,
   countSignupAttempts24hByDomain,
   countSignupAttempts24hByProxy,
@@ -1196,6 +1770,18 @@ module.exports = {
   deleteIgLikeJob,
   getIgLikeJob,
   createSmmLikeOrder,
+  createSmmCommentOrder,
+  listSmmCommentOrders,
+  getSmmCommentOrder,
+  getPendingSmmCommentExecutions,
+  assignSmmCommentExecutionAccount,
+  resetRunningSmmCommentExecutions,
+  resetFailedSmmCommentExecutions,
+  markSmmCommentExecutionRunning,
+  updateSmmCommentExecution,
+  setSmmCommentOrderStatus,
+  cancelSmmCommentOrder,
+  deleteSmmCommentOrder,
   listSmmLikeOrders,
   getSmmLikeOrder,
   updateSmmExecutionStatus,
@@ -1208,17 +1794,34 @@ module.exports = {
   addProxy,
   listProxies,
   deleteProxy,
+  setProxyLabel,
   updateProxy,
   clearProxies,
   setAccountProxy,
   assignProxiesToAccounts,
+  countIpUses,
+  addAutoProxy,
+  markAutoProxyAttempt,
+  bindAutoProxy,
+  burnAutoProxy,
+  releaseAutoProxy,
+  releaseStaleAutoProxies,
+  accountsUsingProxy,
   addIpHistory,
   listIpHistory,
   latestIpByAccount,
   addGmail,
   listGmail,
   claimGmail,
+  markGmailUsed,
+  gmailUsedPlatforms,
   gmailStats,
+  gmailTotpCode,
+  setAccountTotp,
+  accountTotpCode,
+  setGmailLoginStatus,
+  addGmailLoginLog,
+  listGmailLoginLog,
   importGmailText,
   deleteGmail,
 };

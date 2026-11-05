@@ -1,0 +1,16 @@
+metrik,tanpa_sl,sl80
+trade,496,497
+net,-810.75,-443.71
+pf,0.8,0.83
+wr_pct,37.3,27.77
+dd_pct,9.15,5.15
+avg_win,17.76,15.52
+avg_loss,-13.16,-7.2
+max_loss,-84.5,-8.0
+avg_minutes,67.4,41.8
+loser_le60,229,318
+loser_le60_share_pct,46.17,63.98
+gross_loss_le60_pct,84.79,93.95
+net_gt60,2435.99,1812.64
+sl_exits,0,296
+sl_net,0,-2368.0

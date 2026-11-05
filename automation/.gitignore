@@ -1,0 +1,26 @@
+# Environment
+.env
+
+# Node modules
+node_modules/
+
+# Output directories
+profiles/
+screenshots/
+cookies/
+logs/
+
+# Results
+*.json
+!package.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~

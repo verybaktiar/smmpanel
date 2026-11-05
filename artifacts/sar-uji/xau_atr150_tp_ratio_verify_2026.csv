@@ -1,0 +1,5 @@
+uji,sl_pips,tp_ratio,tp_manual_pips,tp_effective_pips,trade,tp_exits,sl_exits,net,pf,wr_pct,dd_pct
+Rasio 2.0,40,2.0,0,80,497,154,333,-102.69,0.92,31.99,1.76
+Manual TP 80,40,0,80,80,497,154,333,-102.69,0.92,31.99,1.76
+Rasio 0.5,80,0.5,0,40,497,322,167,-71.67,0.95,65.19,2.39
+Manual TP 40,80,0,40,40,497,322,167,-71.67,0.95,65.19,2.39

@@ -1,26 +1,321 @@
-/* R-31: hero tint FB + komposer lapang + file picker tombol agar halaman posting terasa seperti editor, bukan form mentah. */
-.composer-box { min-height: 130px; resize: vertical; }
-.count { display: block; text-align: right; font-size: 11.5px; color: #9aa0aa; margin-top: 4px; }
-.ai-row { display: flex; gap: 8px; }
-.ai-row .inp { flex: 1; min-width: 0; }
-.file-row { display: flex; gap: 10px; align-items: center; }
-.file-name { font-size: 12.5px; color: #9aa0aa; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.composer-send { width: 100%; margin-top: 4px; }
-.psteps-head { display: flex; justify-content: space-between; font-size: 12.5px; color: #9aa0aa; margin-bottom: 8px; }
-.sched-acc { font-size: 13px; color: #9aa0aa; margin: -4px 0 12px; }
-.sched-acc strong { color: #fff; }
-.cut { max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sched-del { border: 1px solid rgba(226,59,74,.4); color: #ff7a86; border-radius: 9999px; padding: 6px 12px; font-size: 12px; cursor: pointer; background: transparent; }
-/* R-31: pratinjau ala postingan IG agar kolom kanan halaman IG berguna, bukan ruang kosong. */
-.ig-prev-card { align-self: start; }
-.ig-post { border: 1px solid rgba(255,255,255,.09); border-radius: 14px; overflow: hidden; background: rgba(0,0,0,.25); }
+/* Halaman Posting: satu editor, satu pratinjau, satu antrean.
+   Kelas disendirikan (.post-*) supaya tampilan halaman ini tidak bergantung pada
+   CSS halaman lain: sebelumnya .acc-hero/.card hanya bergaya setelah halaman Akun
+   pernah dibuka, jadi padding kartu berubah dari 22px ke 8px menurut riwayat navigasi. */
+.post-page { --post-muted: #a3adb8; }
+.post-page .card { border-radius: 18px; padding: 20px 22px; }
+
+/* Hero: tint biru FB menandai platform yang sedang dibuka, sejalan dengan kartu
+   platform di Dashboard. */
+.post-hero {
+  display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap;
+  border: 1px solid rgba(255,255,255,.11); border-radius: 20px; padding: 18px 22px; margin-bottom: 16px;
+  background: rgba(255,255,255,.025);
+}
+.post-hero-fb { background: linear-gradient(120deg, rgba(24,119,242,.16), transparent 62%), rgba(255,255,255,.025); }
+.post-hero-ig { background: linear-gradient(120deg, rgba(221,42,123,.15), transparent 62%), rgba(255,255,255,.025); }
+.post-hero .page-title { margin: 0 0 3px; }
+.post-hero-sub { margin: 0; color: var(--post-muted); font-size: 13px; line-height: 1.5; }
+
+/* Editor dapat kolom lebih lebar (teks butuh baris panjang); rel pratinjau sempit. */
+.post-layout { display: grid; grid-template-columns: minmax(0, 1.62fr) minmax(280px, 1fr); gap: 14px; align-items: start; }
+.post-rail { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.post-rail .card { margin-bottom: 0; }
+
+.post-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px 14px; flex-wrap: wrap; margin-bottom: 14px; }
+.post-card-head h3 { margin: 0; }
+.post-hint { font-size: 12.5px; color: var(--post-muted); line-height: 1.55; margin: 0 0 12px; }
+.post-card-head .post-hint { margin: 0; }
+.post-label { font-size: 12px; color: var(--post-muted); }
+
+/* Pemilih akun: daftar centang menggantikan dropdown karena satu kiriman bisa
+   ditujukan ke banyak akun. Tinggi daftar dibatasi supaya 40 akun tidak mendorong
+   tombol kirim jauh ke bawah; daftarnya sendiri tetap bisa digulir. */
+.post-pick { border: 1px solid rgba(255,255,255,.14); border-radius: 12px; background: rgba(14,16,21,.55); overflow: hidden; }
+.post-pick-head { display: flex; align-items: center; justify-content: space-between; gap: 6px 12px; flex-wrap: wrap; padding: 2px 6px 2px 14px; border-bottom: 1px solid rgba(255,255,255,.08); }
+.post-pick-count { font-size: 12px; color: var(--post-muted); }
+.post-pick-all { font-family: inherit; background: none; border: 1px solid transparent; color: #a5aaff; font-size: 12.5px; font-weight: 600; border-radius: 8px; padding: 0 12px; min-height: 44px; cursor: pointer; transition: background .15s, border-color .15s; }
+.post-pick-all:hover:not(:disabled) { background: rgba(124,130,255,.12); border-color: rgba(124,130,255,.3); }
+.post-pick-all:disabled { opacity: .42; cursor: not-allowed; }
+.post-pick-all:focus-visible { outline: none; border-color: #7c82ff; box-shadow: 0 0 0 3px rgba(124,130,255,.25); }
+.post-pick-search { padding: 8px 8px 0; }
+.post-pick-search .inp { min-height: 40px; font-size: 12.5px; }
+.post-pick-empty { margin: 0; padding: 14px 12px; font-size: 12.5px; line-height: 1.5; color: var(--post-muted); }
+.post-pick-list { max-height: 236px; overflow-y: auto; padding: 6px; display: flex; flex-direction: column; gap: 2px; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.2) transparent; }
+.post-pick-row { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 4px 10px; border: 1px solid transparent; border-radius: 9px; font-size: 13px; color: #e6e9ee; cursor: pointer; transition: background .15s, border-color .15s; }
+.post-pick-row:hover { background: rgba(255,255,255,.05); }
+.post-pick-row.on { background: rgba(73,79,223,.16); border-color: rgba(124,130,255,.34); }
+.post-pick-row:focus-within { border-color: #7c82ff; box-shadow: 0 0 0 3px rgba(124,130,255,.22); }
+.post-pick-row input { width: 17px; height: 17px; accent-color: #494fdf; cursor: pointer; flex-shrink: 0; }
+.post-pick-row input:disabled, .post-pick-row:has(input:disabled) { cursor: not-allowed; }
+.post-pick-row:has(input:disabled) { opacity: .6; }
+.post-pick-av { width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 11.5px; font-weight: 700; color: #cfd6df; background: rgba(255,255,255,.09); }
+.post-pick-row.on .post-pick-av { color: #fff; background: rgba(124,130,255,.32); }
+.post-pick-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.composer-box { min-height: 168px; resize: vertical; line-height: 1.6; }
+.post-count { display: flex; justify-content: space-between; gap: 10px 16px; flex-wrap: wrap; font-size: 11.5px; color: var(--post-muted); margin: 6px 0 0; }
+.post-count.is-over { color: #ff8590; font-weight: 600; }
+.post-count-single { display: block; text-align: right; font-size: 11.5px; color: var(--post-muted); }
+
+.post-ai { margin-top: 12px; }
+.post-ai-head { display: flex; align-items: center; justify-content: space-between; gap: 6px 12px; flex-wrap: wrap; margin-bottom: 6px; }
+.post-ai-head .post-label { margin: 0; }
+.post-ai-cfg { display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 100%; font-size: 11px; color: var(--post-muted); }
+.post-ai-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; background: #fbbf24; }
+.post-ai-dot.is-on { background: #2dd4a7; }
+.post-ai-model { min-width: 0; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.post-ai-link { color: #a5aaff; font-weight: 600; text-decoration: none; padding: 4px 2px; }
+.post-ai-link:hover { text-decoration: underline; }
+.post-ai-row { display: flex; gap: 8px; }
+.post-ai-row .inp { flex: 1; min-width: 0; }
+.post-ai-note { margin: 8px 0 0; }
+
+/* Mode isi: segmented kecil, hanya muncul saat ada lebih dari satu akun. */
+.post-mode-wrap { margin-bottom: 14px; }
+.post-modes { display: inline-flex; gap: 3px; padding: 3px; border: 1px solid rgba(255,255,255,.14); border-radius: 11px; background: rgba(14,16,21,.55); }
+.post-mode { font-family: inherit; border: 1px solid transparent; background: none; color: var(--post-muted); font-size: 12.5px; font-weight: 600; border-radius: 8px; padding: 0 14px; min-height: 38px; cursor: pointer; transition: background .15s, color .15s, border-color .15s; }
+.post-mode:hover:not(:disabled) { color: #e6e9ee; background: rgba(255,255,255,.05); }
+.post-mode.on { background: rgba(73,79,223,.24); border-color: rgba(124,130,255,.38); color: #fff; }
+.post-mode:focus-visible { outline: none; border-color: #7c82ff; box-shadow: 0 0 0 3px rgba(124,130,255,.22); }
+.post-mode:disabled { opacity: .5; cursor: not-allowed; }
+.post-mode-hint { margin: 8px 0 0; }
+.post-check { display: flex; align-items: center; gap: 9px; margin-top: 10px; min-height: 44px; font-size: 12.5px; color: #d0d5dd; cursor: pointer; }
+.post-check input { width: 16px; height: 16px; accent-color: #494fdf; cursor: pointer; flex-shrink: 0; }
+.post-check input:disabled { cursor: not-allowed; }
+
+/* Variasi per akun: satu kartu per akun, caption bisa diedit, gambar tampil
+   sebagai bukti visual sebelum dikirim. */
+.post-vary { display: flex; flex-direction: column; gap: 8px; }
+.post-vary-row { border: 1px solid rgba(255,255,255,.12); border-radius: 12px; padding: 10px 12px; background: rgba(0,0,0,.18); }
+.post-vary-top { display: flex; align-items: center; gap: 9px; margin-bottom: 8px; }
+.post-vary-name { font-size: 13px; font-weight: 600; color: #f5f6f8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.post-vary-state { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; color: var(--post-muted); }
+.post-vary-state.is-text, .post-vary-state.is-image { color: #a5aaff; }
+.post-vary-state.is-ready { color: #2dd4a7; }
+.post-vary-state.is-bad { color: #ff8590; }
+.post-vary-state.is-stop { color: #fbbf24; }
+.post-vary-cap { min-height: 70px; font-size: 12.5px; line-height: 1.55; }
+.post-vary-foot { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+.post-vary-thumb { width: 56px; height: 56px; border-radius: 9px; object-fit: cover; border: 1px solid rgba(255,255,255,.14); flex-shrink: 0; }
+.post-vary-thumb.is-empty { display: flex; align-items: center; justify-content: center; font-size: 10.5px; color: var(--post-muted); background: rgba(255,255,255,.04); border-style: dashed; }
+.post-vary-thumb.is-loading { position: relative; overflow: hidden; border-style: solid; border-color: rgba(124,130,255,.42); }
+.post-vary-thumb.is-loading::after { content: ''; position: absolute; inset: 0; background: linear-gradient(100deg, transparent 20%, rgba(143,149,255,.24) 50%, transparent 80%); background-size: 220% 100%; animation: post-shimmer 1.4s linear infinite; }
+.post-vary-meta { display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; min-width: 0; }
+.post-vary-note { font-size: 11.5px; line-height: 1.45; color: #ff8590; overflow-wrap: anywhere; }
+.post-vary-retry { min-height: 34px; padding: 5px 12px; font-size: 12px; }
+.post-vary-count { font-size: 11px; color: var(--post-muted); margin-left: auto; }
+.post-vary-count.is-over { color: #ff8590; font-weight: 600; }
+.post-vary-hint { margin: 10px 0 0; }
+
+/* Progres penyiapan variasi. Tiga tingkat, satu pertanyaan: masih bekerja atau
+   macet. Strip fase menjawab untuk keseluruhan proses, baris akun menunjukkan
+   siapa yang sedang ditulis, dan kotak gambar menandai unduhan yang menyusul.
+   Gerak hanya di transform/opacity, warna mengikuti status (biru kerja, kuning
+   menunggu kuota), bukan dekorasi. */
+.post-spin {
+  width: 13px; height: 13px; border-radius: 50%; flex-shrink: 0;
+  border: 2px solid rgba(255,255,255,.28); border-top-color: #fff;
+  animation: post-turn .7s linear infinite;
+}
+.post-vary-thumb .post-spin { width: 18px; height: 18px; border-color: rgba(165,170,255,.35); border-top-color: #a5aaff; }
+@keyframes post-turn { to { transform: rotate(1turn); } }
+
+.post-work { margin: 12px 0; padding: 11px 14px 10px; border: 1px solid rgba(124,130,255,.34); border-radius: 12px; background: rgba(73,79,223,.08); }
+.post-work.is-wait { border-color: rgba(251,191,36,.34); background: rgba(251,191,36,.06); }
+.post-work-top { display: flex; align-items: center; justify-content: space-between; gap: 8px 12px; font-size: 12.5px; color: #e6e9ee; }
+.post-work-label { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+.post-work-label > span:not(.post-spin):not(.post-work-dots) { min-width: 0; overflow-wrap: anywhere; }
+.post-work-side { display: inline-flex; align-items: center; gap: 10px; margin-left: auto; }
+.post-work-time { font-size: 11.5px; color: var(--post-muted); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.post-work.is-wait .post-work-time { color: #fbbf24; }
+/* Batalkan harus terbaca sebagai aksi, bukan hiasan: tombol ghost yang sama
+   dengan aksi sekunder lain, dikecilkan hanya di desktop agar strip tetap satu baris. */
+.post-work-stop { min-height: 34px; padding: 3px 12px; font-size: 12px; }
+.post-work-bar { height: 4px; border-radius: 9999px; overflow: hidden; background: rgba(255,255,255,.12); margin: 10px 0 7px; }
+.post-work-bar i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #494fdf, #8f95ff); }
+/* Fase caption cuma satu permintaan: sapuan berulang, bukan persentase palsu. */
+.post-work-bar:not(.is-count) i { width: 38%; animation: post-sweep 1.6s cubic-bezier(.4,0,.6,1) infinite; }
+/* Fase gambar punya jumlah akun pasti: lebar naik mengikuti yang sudah selesai. */
+.post-work-bar.is-count i { width: 0; transition: width .5s cubic-bezier(.34,1.56,.64,1); }
+.post-work.is-wait .post-work-bar i { background: #fbbf24; }
+@keyframes post-sweep { from { transform: translateX(-110%); } to { transform: translateX(300%); } }
+.post-work-foot { margin: 0; font-size: 11.5px; color: var(--post-muted); }
+.post-work-dots { display: inline-flex; align-items: center; gap: 3px; }
+.post-work-dots i { width: 3px; height: 3px; border-radius: 50%; background: currentColor; opacity: .35; animation: post-dot 1.2s ease-in-out infinite; }
+.post-work-dots i:nth-child(2) { animation-delay: .15s; }
+.post-work-dots i:nth-child(3) { animation-delay: .3s; }
+@keyframes post-dot { 0%, 60%, 100% { opacity: .3; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-2px); } }
+
+.post-vary-row.is-busy { border-color: rgba(124,130,255,.38); background: rgba(73,79,223,.06); }
+.post-vary-skel { display: flex; flex-direction: column; gap: 8px; min-height: 70px; padding: 12px; border: 1px dashed rgba(124,130,255,.34); border-radius: 10px; }
+.post-vary-skel span { display: block; height: 9px; border-radius: 9999px; background: linear-gradient(90deg, rgba(255,255,255,.07) 20%, rgba(143,149,255,.28) 50%, rgba(255,255,255,.07) 80%); background-size: 240% 100%; animation: post-shimmer 1.4s linear infinite; }
+.post-vary-skel span:nth-child(1) { width: 92%; }
+.post-vary-skel span:nth-child(2) { width: 76%; }
+.post-vary-skel span:nth-child(3) { width: 48%; }
+@keyframes post-shimmer { from { background-position: 140% 0; } to { background-position: -60% 0; } }
+
+.post-file { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.post-file-main { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1 1 220px; }
+/* Nama file dan asal gambarnya bertumpuk supaya nama panjang tidak mendorong
+   tombol di sebelahnya. */
+.post-file-meta { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.post-engine { align-self: flex-start; font-size: 11.5px; color: var(--post-muted); }
+.post-thumb { width: 56px; height: 56px; object-fit: cover; border-radius: 10px; border: 1px solid rgba(255,255,255,.16); flex-shrink: 0; }
+/* Pemilih model gambar: selebar isinya, bukan selebar kolom seperti .inp biasa. */
+.post-model { width: auto; flex: 0 0 auto; padding: 8px 10px; font-size: 12.5px; }
+.post-fname { font-size: 12.5px; color: var(--post-muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Tombol bingkai berita: status aktif dibaca dari titik dan tepi, bukan hanya
+   warna teks, supaya tetap jelas di layar redup. */
+.post-news-toggle { display: inline-flex; align-items: center; gap: 7px; }
+.post-news-dot {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  background: rgba(141,150,158,.5); transition: background .18s ease, box-shadow .18s ease;
+}
+.post-news-toggle.is-on { border-color: rgba(200,16,46,.55); }
+.post-news-toggle.is-on .post-news-dot { background: #e2334a; box-shadow: 0 0 0 3px rgba(226,59,74,.18); }
+@media (prefers-reduced-motion: reduce) {
+  .post-news-dot { transition: none; }
+}
+
+/* Komentar otomatis: satu teks untuk semua akun terpilih; hasilnya dibaca di
+   baris akun masing-masing, bukan toast terpisah. */
+.post-autoc { margin-top: 14px; }
+.post-autoc-opt { color: var(--post-muted); font-weight: 400; }
+.post-autoc-box { min-height: 64px; resize: vertical; font-size: 12.5px; line-height: 1.55; }
+.post-autoc-foot { display: flex; justify-content: space-between; gap: 6px 14px; flex-wrap: wrap; margin-top: 6px; }
+.post-autoc-hint { margin: 0; }
+.post-autoc-count { font-size: 11px; color: var(--post-muted); font-variant-numeric: tabular-nums; }
+
+.post-actions { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 16px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,.08); }
+.post-actions .btn-primary { min-width: 184px; }
+.post-note { font-size: 12px; color: var(--post-muted); line-height: 1.5; }
+
+/* Pratinjau FB: kartu posting biasa, bukan mock dekoratif. Tanpa angka reaksi
+   palsu; hanya identitas, teks, dan gambar yang akan dikirim. */
+.fb-post { border: 1px solid rgba(255,255,255,.11); border-radius: 14px; background: rgba(0,0,0,.22); overflow: hidden; }
+.fb-head { display: flex; align-items: center; gap: 10px; padding: 12px 14px 6px; }
+.fb-avatar {
+  width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0;
+  background: linear-gradient(135deg, #1877f2, #0b4fa8);
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 14px; color: #fff;
+}
+.fb-who { min-width: 0; }
+.fb-who strong { display: block; font-size: 13.5px; font-weight: 600; color: #f5f6f8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fb-who span { font-size: 11.5px; color: var(--post-muted); }
+.fb-text { margin: 0; padding: 6px 14px 14px; font-size: 13.5px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
+.fb-text.is-empty { color: var(--post-muted); }
+.fb-media { display: block; width: 100%; max-height: 340px; object-fit: cover; border-top: 1px solid rgba(255,255,255,.08); }
+
+.post-when { font-size: 12.5px; line-height: 1.55; color: var(--post-muted); margin: -2px 0 12px; }
+.post-when.is-past { color: #fbbf24; }
+.post-sched-btn { width: 100%; }
+.post-blocker { margin: 8px 0 0; font-size: 11.5px; color: #fbbf24; }
+
+/* Progres: status per langkah, tombol tutup agar panel lama tidak menetap. */
+.post-progress { margin-bottom: 16px; }
+.post-progress .psteps-head { display: flex; align-items: center; gap: 10px; font-size: 12.5px; color: var(--post-muted); margin-bottom: 8px; }
+.psteps-pct { margin-left: auto; font-weight: 600; color: #f5f6f8; }
+.post-progress .steps { margin: 12px 0 0; }
+
+/* Hasil per akun: satu baris per akun terpilih, urut sesuai antrean kiriman.
+   Warna hanya menandai status (tunggu, jalan, terkirim, gagal), bukan dekorasi. */
+.post-run { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.post-run-row { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; align-items: center; gap: 4px 10px; padding: 9px 12px; border: 1px solid rgba(255,255,255,.11); border-radius: 11px; font-size: 13px; color: #cbd2da; }
+.post-run-row.is-on { border-color: #494fdf; background: rgba(73,79,223,.1); color: #fff; }
+.post-run-row.is-ok { border-color: rgba(45,212,167,.4); }
+.post-run-row.is-bad { border-color: rgba(226,59,74,.45); }
+.post-run-mark { text-align: center; font-weight: 700; }
+.is-on .post-run-mark { color: #a5aaff; }
+.is-ok .post-run-mark { color: #2dd4a7; }
+.is-bad .post-run-mark { color: #ff8590; }
+.post-run-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.post-run-state { font-size: 11.5px; font-weight: 600; color: var(--post-muted); }
+.is-on .post-run-state { color: #a5aaff; }
+.is-ok .post-run-state { color: #2dd4a7; }
+.is-bad .post-run-state { color: #ff8590; }
+.post-run-note { grid-column: 2 / -1; font-size: 11.5px; line-height: 1.45; color: #ff9aa4; overflow-wrap: anywhere; }
+.post-run-foot { margin: 10px 0 0; font-size: 12px; line-height: 1.55; color: var(--post-muted); }
+
+.post-err {
+  display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap;
+  border: 1px solid rgba(226,59,74,.42); background: rgba(226,59,74,.08); color: #ff8590;
+  border-radius: 12px; padding: 12px 16px; margin-bottom: 16px; font-size: 13px;
+}
+
+.post-empty h3 { margin-bottom: 8px; }
+.post-empty p { margin: 0 0 16px; color: var(--post-muted); font-size: 13px; line-height: 1.6; max-width: 62ch; }
+.post-empty-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.post-empty-actions a { text-decoration: none; }
+
+/* Antrean: tabel bisa digulir mendatar di layar sempit tanpa melebarkan halaman. */
+.post-queue { scroll-margin-top: 16px; }
+.post-queue-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px 14px; flex-wrap: wrap; margin-bottom: 10px; }
+.post-queue-head h3 { margin: 0; }
+.post-queue-head .post-hint { margin: 0; }
+.post-queue-empty { margin: 0; color: var(--post-muted); font-size: 13px; line-height: 1.6; }
+.post-cut { max-width: 300px; }
+.post-acc-cell { white-space: nowrap; }
+.post-when-cell { display: block; font-size: 12.5px; }
+.post-rel { display: block; font-size: 11.5px; color: var(--post-muted); margin-top: 2px; }
+
+/* Pratinjau IG (dipakai tab Instagram di halaman yang sama). */
+.ig-post { border: 1px solid rgba(255,255,255,.11); border-radius: 14px; overflow: hidden; background: rgba(0,0,0,.25); }
 .ig-head { display: flex; align-items: center; gap: 10px; padding: 12px 14px; font-size: 13.5px; }
-.ig-avatar { width: 30px; height: 30px; border-radius: 50%; background: linear-gradient(135deg,#F58529,#DD2A7B); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; color: #fff; }
+.ig-avatar {
+  width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0;
+  background: linear-gradient(135deg, #F58529, #DD2A7B);
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 13px; color: #fff;
+}
+.ig-head strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ig-media { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; }
-.ig-empty { display: flex; align-items: center; justify-content: center; color: #9aa0aa; font-size: 13px; background: rgba(255,255,255,.03); }
+.ig-empty { display: flex; align-items: center; justify-content: center; color: var(--post-muted); font-size: 13px; background: rgba(255,255,255,.03); text-align: center; padding: 0 18px; }
 .ig-body { padding: 12px 14px; }
-.ig-cap { font-size: 13.5px; line-height: 1.55; margin: 0 0 6px; word-break: break-word; }
+.ig-cap { font-size: 13.5px; line-height: 1.55; margin: 0 0 6px; word-break: break-word; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+@media (max-width: 980px) {
+  .post-layout { grid-template-columns: minmax(0, 1fr); }
+}
+
 @media (max-width: 720px) {
-  .ai-row { flex-direction: column; }
-  .ai-row .btn-ghost { width: 100%; }
+  .post-page .card { padding: 18px 16px; }
+  /* Tap target 44px di layar sentuh, mengikuti aturan mobile halaman Akun. */
+  .post-page .btn-primary, .post-page .btn-ghost, .post-page .btn-danger-ghost { min-height: 44px; }
+  .post-page .inp { min-height: 44px; }
+  .post-hero { padding: 16px 18px; }
+  .post-ai-row { flex-direction: column; }
+  .post-ai-row .btn-ghost { width: 100%; }
+  .post-pick-head { padding: 2px 6px 2px 12px; }
+  .post-pick-list { max-height: 300px; }
+  .post-ai-model { max-width: 180px; }
+  .post-run-name { white-space: normal; overflow-wrap: anywhere; }
+  .post-modes { display: flex; width: 100%; }
+  .post-mode { flex: 1; min-height: 44px; }
+  .post-work-top { flex-wrap: wrap; }
+  .post-vary-foot { align-items: flex-start; }
+  .post-vary-count { margin-left: 0; }
+  .post-file { align-items: stretch; }
+  .post-file-main { flex: 1 1 100%; flex-direction: column; align-items: stretch; }
+  .post-fname { white-space: normal; overflow-wrap: anywhere; }
+  .post-file > .btn-ghost { width: 100%; }
+  /* Pemilih model ikut selebar baris, sama seperti tombol di sebelahnya. */
+  .post-file > .post-model { width: 100%; }
+  .post-actions { flex-direction: column; align-items: stretch; }
+  .post-actions .btn-primary { width: 100%; }
+  .post-count { font-size: 11px; }
+}
+
+@media (max-width: 560px) {
+  .post-hero .btn-ghost { width: 100%; }
+}
+
+/* Gerak hanya penanda proses. Saat gerak diminta berhenti, status tetap terbaca
+   dari teks fase, warna strip, dan angka akun yang selesai. */
+@media (prefers-reduced-motion: reduce) {
+  .post-spin, .post-work-dots i, .post-vary-skel span, .post-vary-thumb.is-loading::after, .post-work-bar:not(.is-count) i { animation: none; }
+  .post-work-bar.is-count i { transition: none; }
+  .post-work-dots i { opacity: 1; }
+  .post-work-bar:not(.is-count) i { width: 42%; opacity: .7; }
 }

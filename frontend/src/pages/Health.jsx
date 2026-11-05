@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, gatesAll, gateLabel } from '../api.js';
 import '../ui.css';
@@ -17,7 +17,7 @@ export default function Health() {
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState('Semua'); // filter baris: Semua | Siap | Tertahan | Tak terbaca
 
-  const load = (n) => {
+  const load = useCallback((n) => {
     setRows(null);
     setFailed(false);
     setErrText('');
@@ -43,10 +43,10 @@ export default function Health() {
       setRows(merged);
     });
     setAttempt(n);
-  };
-  // Muat pertama saat halaman dibuka.
-  const [init] = useState(() => { load(0); return true; });
-  void init;
+  }, []);
+  // Muat pertama saat halaman dibuka lewat efek, bukan initializer useState:
+  // load() memanggil setState, dan setState saat render memicu error React.
+  useEffect(() => { load(0); }, [load]);
   const retry = () => load(attempt + 1);
 
   // Sinyal bisa dibaca walau satu sumber gagal (tampil "Tak terbaca", bukan baris hilang).

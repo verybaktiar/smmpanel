@@ -1,0 +1,174 @@
+/* Order komentar memakai daftar baris, bukan tabel: satu order membawa URL,
+   pratinjau teks, progres, dan aksi sekaligus. Di tabel empat informasi itu
+   berebut lebar sampai URL dan angka target terpotong.
+   R-03: tombol halaman ini 44px agar tap target nyaman di layar sentuh. */
+.cmt-page .btn-primary, .cmt-page .btn-ghost, .cmt-page .btn-danger-ghost { min-height: 44px; }
+.cmt-card { padding: 6px 18px; }
+.cmt-list { list-style: none; margin: 0; padding: 0; }
+.cmt-order { display: flex; flex-direction: column; gap: 7px; padding: 16px 2px; border-bottom: 1px solid rgba(255,255,255,.07); }
+.cmt-order:last-child { border-bottom: 0; }
+.cmt-order-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.cmt-order-name { font-size: 14.5px; font-weight: 650; letter-spacing: -.01em; color: #f5f6f8; overflow-wrap: anywhere; }
+.cmt-url { font-size: 12px; color: #8ab4ff; text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.cmt-url:hover { text-decoration: underline; }
+.cmt-quote { margin: 0; font-size: 12.5px; color: #b6bec8; line-height: 1.55; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.cmt-order-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px 16px; flex-wrap: wrap; margin-top: 4px; }
+.cmt-progress { display: flex; align-items: center; gap: 10px; flex: 1 1 250px; min-width: 0; }
+.cmt-prog { position: relative; height: 6px; flex: 1; max-width: 200px; min-width: 80px; background: rgba(255,255,255,.09); border-radius: 9999px; overflow: hidden; }
+.cmt-prog i { position: relative; z-index: 1; display: block; height: 100%; background: #7c82ff; border-radius: inherit; transition: width .45s cubic-bezier(.16,1,.3,1); }
+/* Order yang sedang jalan mendapat satu kilau lembut yang menyapu jalur kosong.
+   Ini penanda aktivitas, bukan tambahan persentase: lebar isi tetap dari
+   completed_count, dan angkanya tetap terlihat di samping bar. */
+.cmt-prog.is-running::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 38%;
+  background: linear-gradient(90deg, transparent, rgba(185,188,255,.55), transparent);
+  transform: translateX(-100%);
+  animation: cmt-prog-sweep 2.4s cubic-bezier(.16,1,.3,1) infinite;
+  pointer-events: none;
+}
+.cmt-prog.is-running i { background: linear-gradient(180deg, #9aa1ff, #6d73ff); }
+.cmt-prog.done i { background: #4ade80; }
+@keyframes cmt-prog-sweep {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(320%); }
+}
+/* Selesai: satu sapuan terang melewati bar yang penuh, lalu isinya memantul
+   sekali. Pendek dan sekali jalan karena status Selesai sudah dibaca dari
+   pill; kelas ini hanya dipasang saat status benar-benar berubah. */
+.cmt-prog.just-done::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background: linear-gradient(90deg, transparent, rgba(220,255,232,.9), transparent);
+  transform: translateX(-100%);
+  animation: cmt-prog-finish .9s cubic-bezier(.16,1,.3,1) 1 both;
+  pointer-events: none;
+}
+.cmt-prog.just-done i { animation: cmt-prog-settle .9s cubic-bezier(.34,1.56,.64,1) 1; }
+@keyframes cmt-prog-finish {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(100%); }
+}
+@keyframes cmt-prog-settle {
+  0% { transform: scaleY(1); }
+  30% { transform: scaleY(1.4); }
+  100% { transform: scaleY(1); }
+}
+.cmt-count { font-size: 12px; color: #a8b0b8; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.cmt-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-left: auto; }
+.cmt-actions .btn-ghost, .cmt-actions .btn-danger-ghost { padding: 7px 14px; font-size: 12.5px; }
+
+/* Empty state memberi jalan keluar, bukan hanya kalimat kosong. */
+.cmt-empty { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; padding: 44px 20px 48px; }
+.cmt-empty-icon { width: 44px; height: 44px; border-radius: 14px; display: flex; align-items: center; justify-content: center; color: #9aa1ff; background: rgba(73,79,223,.14); border: 1px solid rgba(73,79,223,.35); margin-bottom: 4px; }
+.cmt-empty strong { font-size: 15px; color: #f5f6f8; }
+.cmt-empty p { margin: 0 0 10px; font-size: 13px; color: #a8b0b8; max-width: 340px; line-height: 1.6; }
+
+.cmt-error { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 8px 2px; }
+.cmt-error p { margin: 0; font-size: 13px; color: #a8b0b8; }
+
+/* Form order lebih lega dari modal akun: tiga input dan pilihan mode komentar.
+   Panel dasar (.modal) ada di ui.css, jadi tidak bergantung halaman Akun. */
+.cmt-page .overlay .modal { width: min(440px, calc(100vw - 28px)); gap: 10px; }
+.cmt-page .overlay .modal label.f { margin-bottom: 0; }
+.cmt-modal-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 2px; }
+.cmt-modal-head h3 { margin: 0; }
+
+/* Catatan kuota akun di modal. */
+.cmt-hint { font-size: 12px; color: #a8b0b8; margin: -2px 0 4px; line-height: 1.6; }
+.cmt-hint-warn { color: #fbbf24; }
+.cmt-hint a { color: #aeb2ff; text-decoration: underline; text-underline-offset: 2px; }
+.cmt-hint a:hover { color: #d3d6ff; }
+/* Pilihan mode komentar. Seluruh baris bisa diklik, bukan hanya kotak kecilnya. */
+.cmt-ai { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border: 1px solid rgba(255,255,255,.12); border-radius: 12px; background: rgba(255,255,255,.03); cursor: pointer; }
+.cmt-ai:hover { border-color: rgba(255,255,255,.22); }
+.cmt-ai input { flex: none; width: 18px; height: 18px; margin: 2px 0 0; accent-color: #6d73ff; cursor: pointer; }
+.cmt-ai input:focus-visible { outline: 2px solid #7c82ff; outline-offset: 2px; }
+.cmt-ai strong { display: block; font-size: 13px; font-weight: 600; color: #f5f6f8; }
+.cmt-ai small { display: block; margin-top: 3px; font-size: 12px; line-height: 1.55; color: #a8b0b8; }
+/* Pratinjau AI: tombol penuh agar mudah ditekan, lalu kartu hasil berisi teks
+   kiriman yang benar-benar terbaca dan usulan komentar. */
+.cmt-preview-btn { width: 100%; min-height: 44px; }
+/* Saat menunggu, tombol tetap terlihat hidup meski disabled: titik bergerak
+   menandakan proses berjalan, bukan tombol mati. Pratinjau dan Jalankan
+   memakai pola yang sama agar arti gerak tidak berubah di halaman ini. */
+.cmt-preview-btn.is-loading,
+.cmt-run-btn.is-loading { opacity: 1; cursor: progress; color: #e7e9ff; border-color: rgba(124,130,255,.45); background: rgba(73,79,223,.13); }
+.cmt-preview-btn.is-loading:hover,
+.cmt-run-btn.is-loading:hover { background: rgba(73,79,223,.13); border-color: rgba(124,130,255,.45); }
+.cmt-preview-btn.is-loading:active,
+.cmt-run-btn.is-loading:active { transform: none; }
+/* aria-disabled dipakai agar fokus keyboard tidak hilang. Tampilan tetap
+   meredup saat aksi belum bisa dijalankan, dan hover tidak menipu. */
+.cmt-preview-btn[aria-disabled="true"]:not(.is-loading),
+.cmt-run-btn[aria-disabled="true"]:not(.is-loading) { opacity: .48; cursor: not-allowed; }
+.cmt-preview-btn[aria-disabled="true"]:not(.is-loading):hover,
+.cmt-run-btn[aria-disabled="true"]:not(.is-loading):hover { background: rgba(244,244,244,.07); border-color: rgba(255,255,255,.16); }
+.cmt-preview-btn[aria-disabled="true"]:not(.is-loading):active,
+.cmt-run-btn[aria-disabled="true"]:not(.is-loading):active { transform: none; }
+.cmt-reading { display: inline-flex; align-items: center; gap: 7px; }
+.cmt-dots { display: inline-flex; align-items: center; gap: 3px; height: 10px; }
+.cmt-dots i { width: 4px; height: 4px; border-radius: 50%; background: #c7caff; animation: cmt-dot .9s ease-in-out infinite; }
+.cmt-dots i:nth-child(2) { animation-delay: .12s; }
+.cmt-dots i:nth-child(3) { animation-delay: .24s; }
+@keyframes cmt-dot {
+  0%, 60%, 100% { transform: translateY(0); opacity: .5; }
+  30% { transform: translateY(-4px); opacity: 1; }
+}
+/* Kartu loading memakai garis teks hantu dan satu band cahaya yang menyapu
+   turun, seperti sedang membaca. Satu gerakan saja agar tidak ramai. */
+.cmt-preview-loading { position: relative; overflow: hidden; }
+.cmt-preview-timer { font-variant-numeric: tabular-nums; color: #b9bcff; }
+.cmt-scan { position: relative; display: flex; flex-direction: column; gap: 7px; padding: 10px 10px 12px; border-radius: 8px; background: rgba(0,0,0,.2); overflow: hidden; }
+.cmt-scan i { display: block; height: 9px; border-radius: 4px; background: rgba(255,255,255,.08); }
+.cmt-scan i:nth-child(1) { width: 88%; }
+.cmt-scan i:nth-child(2) { width: 70%; }
+.cmt-scan i:nth-child(3) { width: 52%; }
+.cmt-scan::after {
+  content: '';
+  position: absolute;
+  inset: -40% 0 auto;
+  height: 40%;
+  background: linear-gradient(180deg, transparent, rgba(124,130,255,.22) 60%, rgba(158,163,255,.55) 88%, transparent);
+  animation: cmt-scan 2.4s cubic-bezier(.4,0,.2,1) infinite;
+}
+@keyframes cmt-scan {
+  from { transform: translateY(0); }
+  to { transform: translateY(360%); }
+}
+.cmt-preview { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border: 1px solid rgba(255,255,255,.12); border-radius: 12px; background: rgba(255,255,255,.025); }
+.cmt-preview-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.cmt-preview-head strong { font-size: 12.5px; font-weight: 650; color: #f5f6f8; }
+.cmt-preview-head span { font-size: 11.5px; color: #98a2ad; }
+.cmt-preview-label { margin: 4px 0 0; font-size: 11.5px; color: #98a2ad; }
+.cmt-preview-context { margin: 0; padding: 8px 10px; max-height: 140px; overflow-y: auto; border-radius: 8px; background: rgba(0,0,0,.2); font-size: 12.5px; line-height: 1.55; color: #d6d9de; overflow-wrap: anywhere; }
+.cmt-preview-context:focus-visible { outline: 2px solid #7c82ff; outline-offset: 2px; }
+.cmt-preview-comment { margin: 0; padding: 8px 10px; border: 1px solid rgba(124,130,255,.28); border-radius: 8px; background: rgba(73,79,223,.10); font-size: 13px; line-height: 1.55; color: #f5f6f8; overflow-wrap: anywhere; }
+.cmt-preview-foot { margin: 2px 0 0; font-size: 11.5px; line-height: 1.5; color: #98a2ad; }
+.cmt-preview-err { border-color: rgba(251,191,36,.36); background: rgba(251,191,36,.06); }
+.cmt-preview-err .cmt-preview-head strong { color: #fbbf24; }
+.cmt-preview-error { margin: 0; font-size: 12.5px; line-height: 1.55; color: #f6c667; overflow-wrap: anywhere; }
+
+@media (max-width: 560px) {
+  .cmt-card { padding: 4px 14px; }
+  .cmt-order-head { flex-wrap: wrap; }
+  .cmt-actions { width: 100%; margin-left: 0; }
+  .cmt-actions .btn-ghost, .cmt-actions .btn-danger-ghost { flex: 1 1 auto; }
+  .cmt-progress { flex-basis: 100%; }
+  .cmt-prog { max-width: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cmt-prog i { transition: none; }
+  .cmt-prog.is-running::before { animation: none; opacity: 0; }
+  .cmt-prog.just-done::after { animation: none; opacity: 0; }
+  .cmt-prog.just-done i { animation: none; }
+  .cmt-dots i, .cmt-scan::after { animation: none; }
+  .cmt-scan::after { opacity: 0; }
+  .cmt-dots i { opacity: .7; }
+}

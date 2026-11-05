@@ -1,0 +1,140 @@
+/* Halaman AI: satu kolom kerja, satu panel koneksi. Warna hanya menandai
+   keadaan (aktif, tersambung, gagal); tidak ada hiasan di luar fungsi. */
+.ai-page { --ai-muted: #a3adb8; }
+
+.ai-hero {
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 14px 20px; flex-wrap: wrap; margin-bottom: 16px;
+}
+.ai-hero .page-title { margin: 0 0 4px; }
+.ai-hero-sub {
+  margin: 0; max-width: 68ch; color: var(--ai-muted);
+  font-size: 13px; line-height: 1.6;
+}
+
+.ai-layout {
+  display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(300px, 1fr);
+  gap: 14px; align-items: start;
+}
+.ai-col { min-width: 0; }
+.ai-col .card { margin-bottom: 14px; }
+
+/* Tab tugas: segmented penuh supaya keempat pilihan terlihat sekaligus. */
+.ai-tools {
+  display: flex; gap: 3px; padding: 3px; margin-bottom: 12px;
+  border: 1px solid rgba(255,255,255,.14); border-radius: 12px;
+  background: rgba(14,16,21,.55); overflow-x: auto; scrollbar-width: thin;
+}
+.ai-tool {
+  flex: 1 0 auto; font-family: inherit; font-size: 12.5px; font-weight: 600;
+  color: var(--ai-muted); background: none; border: 1px solid transparent;
+  border-radius: 9px; padding: 0 12px; min-height: 40px; cursor: pointer;
+  white-space: nowrap; transition: background .15s, color .15s, border-color .15s;
+}
+.ai-tool:hover:not(:disabled):not(.on) { color: #e6e9ee; background: rgba(255,255,255,.05); }
+.ai-tool.on { color: #fff; background: rgba(73,79,223,.24); border-color: rgba(124,130,255,.38); }
+.ai-tool:disabled { opacity: .5; cursor: not-allowed; }
+
+.ai-hint { margin: 0 0 14px; font-size: 12.5px; line-height: 1.55; color: var(--ai-muted); }
+.ai-source { min-height: 116px; }
+.ai-platform { display: flex; gap: 6px; margin: 2px 0 12px; }
+.ai-plat {
+  font-family: inherit; font-size: 12px; font-weight: 600; color: var(--ai-muted);
+  background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.16);
+  border-radius: 9999px; padding: 0 14px; min-height: 34px; cursor: pointer;
+  transition: background .15s, color .15s, border-color .15s;
+}
+.ai-plat:hover:not(:disabled) { color: #e6e9ee; background: rgba(255,255,255,.08); }
+.ai-plat.on { color: #fff; background: rgba(73,79,223,.26); border-color: rgba(124,130,255,.44); }
+.ai-plat:disabled { opacity: .5; cursor: not-allowed; }
+
+.ai-go { display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap; margin-top: 4px; }
+.ai-go .btn-primary { min-width: 150px; }
+.ai-go-hint { font-size: 12px; color: var(--ai-muted); line-height: 1.5; }
+
+.ai-error {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px 14px; flex-wrap: wrap; margin-top: 14px; padding: 11px 14px;
+  border: 1px solid rgba(226,59,74,.42); border-radius: 11px;
+  background: rgba(226,59,74,.08); color: #ff9aa4; font-size: 12.5px; line-height: 1.5;
+}
+.ai-error-link { color: #ff9aa4; font-weight: 600; white-space: nowrap; }
+
+/* Hasil: teks panjang, tombol tindak lanjut menempel di bawahnya. */
+.ai-out-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+.ai-out-head h3 { margin: 0; }
+.ai-out-count { font-size: 11.5px; color: var(--ai-muted); }
+.ai-out-text {
+  margin: 0; padding: 14px 16px; border-radius: 12px;
+  background: rgba(0,0,0,.2); border: 1px solid rgba(255,255,255,.08);
+  font-size: 14px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.ai-out-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+
+/* Panel koneksi: tetap terlihat saat daftar model atau hasil memanjang. */
+.ai-set { position: sticky; top: 16px; }
+.ai-set.is-target { border-color: rgba(124,130,255,.55); }
+.ai-set .f { margin-bottom: 4px; }
+.ai-set-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.ai-set-head h3 { margin: 0; }
+.ai-chip {
+  display: inline-flex; align-items: center; border-radius: 9999px;
+  font-size: 11px; font-weight: 600; padding: 4px 11px;
+  border: 1px solid transparent; white-space: nowrap;
+}
+.ai-chip.is-on { color: #2dd4a7; background: rgba(45,212,167,.1); border-color: rgba(45,212,167,.38); }
+.ai-chip.is-off { color: #fbbf24; background: rgba(251,191,36,.1); border-color: rgba(251,191,36,.38); }
+
+.ai-presets { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 4px 0 12px; }
+.ai-presets-label { font-size: 11px; color: var(--ai-muted); margin-right: 2px; }
+.ai-preset {
+  font-family: inherit; font-size: 11.5px; font-weight: 600; color: #d6dbe2;
+  background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.16);
+  border-radius: 8px; padding: 0 10px; min-height: 30px; cursor: pointer;
+  transition: background .15s, border-color .15s;
+}
+.ai-preset:hover:not(:disabled) { background: rgba(255,255,255,.1); border-color: rgba(255,255,255,.26); }
+.ai-preset:disabled { opacity: .5; cursor: not-allowed; }
+
+.ai-model-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+.ai-field-note { margin: 4px 0 10px; font-size: 11.5px; line-height: 1.5; color: var(--ai-muted); }
+.ai-set-file { margin: 10px 0 0; }
+.ai-bad { color: #ff9aa4; font-size: 12.5px; line-height: 1.5; }
+
+.ai-test {
+  margin: 0 0 10px; padding: 9px 12px; border-radius: 10px;
+  font-size: 12px; line-height: 1.55; border: 1px solid transparent; overflow-wrap: anywhere;
+}
+.ai-test.is-ok { color: #6ee7c4; background: rgba(45,212,167,.08); border-color: rgba(45,212,167,.32); }
+.ai-test.is-bad { color: #ff9aa4; background: rgba(226,59,74,.08); border-color: rgba(226,59,74,.38); }
+
+.ai-set-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+@media (max-width: 1040px) {
+  .ai-layout { grid-template-columns: minmax(0, 1fr); }
+  .ai-set { position: static; }
+}
+
+@media (max-width: 720px) {
+  .ai-tools { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); overflow: visible; }
+  .ai-tool { min-height: 44px; }
+  .ai-presets { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+  .ai-presets-label { grid-column: 1 / -1; }
+  .ai-preset { min-height: 38px; }
+  .ai-plat { min-height: 40px; }
+  .ai-go .btn-primary { width: 100%; }
+  .ai-out-actions { flex-direction: column; align-items: stretch; }
+  .ai-model-row { grid-template-columns: minmax(0, 1fr); }
+  .ai-model-row .btn-ghost { width: 100%; }
+  .ai-set-actions .btn-primary, .ai-set-actions .btn-ghost, .ai-set-actions .btn-danger-ghost { flex: 1 1 auto; }
+}
+
+@media (max-width: 420px) {
+  .ai-hero .btn-ghost { width: 100%; }
+  .ai-plat { flex: 1; }
+  .ai-platform { display: flex; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-tool, .ai-plat, .ai-preset { transition: none; }
+}

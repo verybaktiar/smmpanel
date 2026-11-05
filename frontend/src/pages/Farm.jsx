@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../api.js';
-import { confirmDlg, alertDlg } from '../dialog.js';
+import { confirmDlg } from '../dialog.js';
 import '../ui.css';
 import './Farm.css';
 
@@ -11,12 +11,17 @@ const HYGIENE_MODES = [
   ['cek', 'Cek', false],
   ['ip', 'Rotasi IP', true],
   ['ig', 'Bersihkan data IG', true],
+  ['fb', 'Bersihkan data FB', true],
   ['ads', 'Reset Ads ID', true],
   ['semua', 'Higiene penuh', true],
 ];
 
 export default function Farm() {
   const [rows, setRows] = useState([]);        // device + state + job (dari /overview)
+  const [adbErr, setAdbErr] = useState(null);  // adb gagal dibaca (beda dengan belum ada HP)
+  // Diagnosa adb (biner mana yang dipakai/rusak). Dimuat saat halaman dibuka dan
+  // saat tombol cek ulang ditekan, tidak ikut polling 8 detik.
+  const [adb, setAdb] = useState({ loading: true, dipakai: null, devices: 0, rows: [], error: null });
   const [jobs, setJobs] = useState([]);
   const [sel, setSel] = useState('');
   const [shot, setShot] = useState('');
@@ -27,12 +32,14 @@ export default function Farm() {
   const [mirror, setMirror] = useState(false);
   const [otp, setOtp] = useState({});
           // jobId -> draft
+  const [phone, setPhone] = useState({});
+          // jobId -> draft nomor HP
   const [hyg, setHyg] = useState({ running: false, log: [], mode: null, result: null, error: null });
-  // Kartu status job create (animasi + log live) — mirip kartu aktivasi di halaman Akun.
+  // Kartu status job create (animasi + log live): mirip kartu aktivasi di halaman Akun.
   const [watchId, setWatchId] = useState(null);
   const [watch, setWatch] = useState(null); // detail job terpantau dari /api/farm/jobs/:id
   const [now, setNow] = useState(Date.now());
-  const dismissed = useRef(new Set()); // job yang kartunya ditutup manual — jangan dibuka lagi
+  const dismissed = useRef(new Set()); // job yang kartunya ditutup manual: jangan dibuka lagi
   const imgRef = useRef(null);
   const shotTimer = useRef(null);
   const swipeRef = useRef(null);
@@ -41,6 +48,7 @@ export default function Farm() {
   useEffect(() => {
     const load = async () => {
       const d = await api('/api/farm/overview').catch(() => null);
+      setAdbErr(d && d.adbError ? d.adbError : null);
       if (d && Array.isArray(d.devices)) {
         setRows(d.devices);
         setJobs(d.jobs || []);
@@ -52,11 +60,62 @@ export default function Farm() {
     return () => clearInterval(t);
   }, []);
 
+  const loadAdb = async () => {
+    setAdb((a) => ({ ...a, loading: true, error: null }));
+    const r = await api('/api/farm/adb').catch(() => null);
+    if (!r || r.error) {
+      // api() mengembalikan "HTTP <kode>" bila jawaban server bukan JSON (server
+      // mati atau sedang restart). Ganti jadi kalimat yang bisa ditindaklanjuti.
+      const e = (r && r.error) || '';
+      const pesan = !e || /^HTTP \d+$/.test(e)
+        ? 'Server tidak menjawab. Pastikan server di port 3000 jalan, lalu tekan Cek ulang.'
+        : e;
+      setAdb({ loading: false, dipakai: null, devices: 0, rows: [], error: pesan });
+      return;
+    }
+    setAdb({ loading: false, dipakai: r.dipakai, devices: r.devices, rows: r.rows || [], error: null });
+  };
+  useEffect(() => { loadAdb(); }, []);
+
+  // ---- Room tamu: cek per HP bila user kedua mana yang bisa dibuat ----
+  const [rooms, setRooms] = useState({ running: false, at: null, rows: [], error: null });
+  const loadRooms = async () => {
+    const r = await api('/api/farm/rooms').catch(() => null);
+    if (r) setRooms({ running: !!r.running, at: r.at, rows: r.rows || [], error: r.error || null });
+  };
+  useEffect(() => { loadRooms(); }, []);
+  useEffect(() => {
+    if (!rooms.running) return;
+    const t = setInterval(loadRooms, 2500);
+    return () => clearInterval(t);
+  }, [rooms.running]);
+  const probeRooms = async () => {
+    setRooms((r) => ({ ...r, running: true, error: null, at: null }));
+    const r = await api('/api/farm/rooms/probe', { method: 'POST' }).catch(() => null);
+    if (r && r.error) setRooms((s) => ({ ...s, running: false, error: r.error }));
+    loadRooms();
+  };
+
   const cur = rows.find((d) => d.id === sel) || null;
   const online = rows.filter((d) => d.state !== 'offline').length;
   const working = rows.filter((d) => d.state === 'working').length;
   const locked = rows.filter((d) => d.state === 'locked').length;
   const doneJobs = jobs.filter((j) => j.status === 'done').length;
+
+  // Label kartu Room tamu per verdict probe.
+  const roomBadge = (v) => ({
+    'bisa': ['p-done', 'Bisa'], 'bisa-parsial': ['p-warn', 'Setengah'],
+    'limit-penuh': ['p-warn', 'Limit penuh'], 'dilewati': ['p-warn', 'Lewati'],
+    'gagal-baca': ['p-fail', 'Tak terbaca'],
+  }[v] || ['p-fail', 'Ditolak']);
+  const roomText = (r) => {
+    if (r.verdict === 'bisa') return 'Room tamu bisa dibuat, IG terpasang di room, pindah-pulang mulus.';
+    if (r.verdict === 'bisa-parsial') return `Room bisa dibuat & pindah, tapi IG belum rapi di room (${r.ig || '?'}).`;
+    if (r.verdict === 'limit-penuh') return `Slot user HP penuh (${r.users || 'terbaca'}). Hapus slot lama di Ruang Kedua/pengaturan user bila mau lanjut.`;
+    if (r.verdict === 'dilewati') return r.pesan || 'Tes dilewati.';
+    if (r.verdict === 'gagal-baca') return r.pesan || 'HP tidak menjawab adb.';
+    return r.pesan || 'HP menolak membuat room tamu via adb.';
+  };
 
   // ---- Screenshot perangkat terpilih ----
   const takeShot = async (id) => {
@@ -114,7 +173,7 @@ export default function Farm() {
   const runHygiene = async (mode) => {
     if (!sel) return;
     if (HYGIENE_MODES.find(([m]) => m === mode)?.[2] &&
-      !(await confirmDlg({ title: `Higiene "${mode}"`, message: `Aksi ini menghapus data atau mengatur ulang ID di HP ${cur ? (cur.model || cur.id) : sel}, dan memutus koneksi sesaat. Jalankan sekarang?`, okLabel: 'Ya, jalankan', danger: true, icon: '⚠' }))) return;
+      !(await confirmDlg({ title: `Higiene "${mode}"`, message: `Aksi ini menghapus data atau mengatur ulang ID di HP ${cur ? (cur.model || cur.id) : sel}, dan memutus koneksi sesaat. Jalankan sekarang?`, okLabel: 'Ya, jalankan', danger: true }))) return;
     const r = await api(`/api/farm/hygiene/${sel}`, { method: 'POST', body: JSON.stringify({ mode }) }).catch(() => null);
     if (r && r.error) setMsg({ ok: false, text: r.error });
     else { setHyg({ running: true, mode, log: [], result: null, error: null }); setMsg({ ok: true, text: `Higiene "${mode}" dimulai.` }); }
@@ -178,6 +237,13 @@ export default function Farm() {
       : r.ok ? { ok: true, text: `OTP ${r.code} diambil dari inbox & ditempel.` }
       : { ok: false, text: r.note || 'Belum ada OTP di inbox.' });
   };
+  const submitPhone = async (jobId) => {
+    const digits = (phone[jobId] || '').replace(/\D/g, '');
+    if (digits.length < 9) { setMsg({ ok: false, text: 'Nomor HP minimal 9 digit.' }); return; }
+    const r = await api(`/api/farm/jobs/${jobId}/phone`, { method: 'POST', body: JSON.stringify({ phone: digits }) });
+    setMsg(r.error ? { ok: false, text: r.error } : { ok: true, text: `Nomor ${r.mask} dikirim, sistem mengetikkan ke HP.` });
+    setPhone((o) => ({ ...o, [jobId]: '' }));
+  };
 
   // Label status dalam bahasa Indonesia; kelas CSS & nilai server (idle/working/...) tidak diubah.
   const stateBadge = (s) => {
@@ -185,8 +251,13 @@ export default function Farm() {
     const label = { idle: 'Siap', working: 'Bekerja', locked: 'Jeda', offline: 'Mati' };
     return <span className={`farm-state ${map[s] || 'offline'}`}>{label[s] || s}</span>;
   };
-  const jobChip = (st) => st === 'done' ? 'p-done' : st === 'failed' ? 'p-fail' : st === 'working' ? 'p-warn' : '';
-  const jobLabel = (st) => st === 'done' ? 'Selesai' : st === 'failed' ? 'Gagal' : st === 'working' ? 'Bekerja' : (st || '');
+  const jobChip = (st) => st === 'done' ? 'p-done' : st === 'failed' ? 'p-fail' : st === 'working' ? 'p-warn' : st === 'cancelled' ? 'p-wait' : '';
+  const jobLabel = (st) => st === 'done' ? 'Selesai' : st === 'failed' ? 'Gagal' : st === 'working' ? 'Bekerja' : st === 'cancelled' ? 'Dibatalkan' : (st || '');
+  const cancelJob = async (jobId) => {
+    if (!(await confirmDlg({ title: 'Batalkan job', message: `Hentikan job ${jobId}? Sopir berhenti dalam maksimal 15 detik dan HP kembali ke user asal.`, okLabel: 'Ya, batalkan', danger: true }))) return;
+    const r = await api(`/api/farm/jobs/${jobId}/cancel`, { method: 'POST' });
+    setMsg(r.error ? { ok: false, text: r.error } : { ok: true, text: `Job ${jobId} dibatalkan.` });
+  };
 
   return (
     <div>
@@ -205,9 +276,74 @@ export default function Farm() {
 
       {msg && <p className={`farm-msg ${msg.ok ? 'ok' : 'bad'}`}>{msg.text}</p>}
 
+      {/* ---- Diagnosa adb: biner yang dipakai dan yang rusak ---- */}
+      <div className="card farm-adb">
+        <div className="farm-adb-head">
+          <h3>Pemeriksaan adb</h3>
+          <button type="button" className="btn-ghost" onClick={loadAdb} disabled={adb.loading}>
+            {adb.loading && <span className="btn-spin" />}Cek ulang
+          </button>
+        </div>
+        {adb.error && <p className="farm-msg bad">{adb.error}</p>}
+        {adb.loading && !adb.rows.length && <p className="muted farm-adb-sum">Memeriksa biner adb…</p>}
+        {!adb.error && adb.rows.length > 0 && (
+          <>
+            <p className="farm-adb-sum">
+              {adb.dipakai
+                ? <>Dipakai <code>{adb.dipakai}</code>, melihat <b>{adb.devices}</b> HP.</>
+                : 'Tidak ada adb yang bisa dipakai. Isi ADB_PATH di .env dengan path adb yang berfungsi.'}
+            </p>
+            <ul className="farm-adb-list">
+              {adb.rows.map((r) => (
+                <li key={r.bin}>
+                  <span className={`pill ${r.ok ? 'p-done' : r.broken ? 'p-fail' : 'p-warn'}`}>
+                    {r.ok ? (r.devices ? `${r.devices} HP` : 'Siap') : r.broken ? 'Rusak' : 'Gagal'}
+                  </span>
+                  <code>{r.bin}</code>
+                  {!r.ok && <span className="farm-adb-note">{r.reason}</span>}
+                </li>
+              ))}
+            </ul>
+            {adb.devices === 0 && (
+              <p className="muted farm-adb-hint">Belum ada HP terlihat. Colok kabel USB, lalu aktifkan USB debugging di HP.</p>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* ---- Room tamu: hasil tes dukungan user kedua per HP ---- */}
+      <div className="card farm-rooms">
+        <div className="farm-adb-head">
+          <h3>Room tamu</h3>
+          <button type="button" className="btn-ghost" onClick={probeRooms} disabled={rooms.running}>
+            {rooms.running && <span className="btn-spin" />}Uji dukungan
+          </button>
+        </div>
+        <p className="muted farm-rooms-sum">
+          Mengetes: room tamu bisa dibuat, IG bisa disiapkan tanpa install ulang, dan bisa pindah-pulang room.
+          User probe dihapus otomatis setelah tes.
+        </p>
+        {rooms.at && <p className="farm-adb-note">Tes terakhir {new Date(rooms.at).toLocaleString('id-ID')}.</p>}
+        {rooms.error && <p className="farm-msg bad">{rooms.error}</p>}
+        {rooms.running && !rooms.rows.length && <p className="muted farm-adb-note">Mengetes HP satu-satu (tiap HP sekitar 20 detik)…</p>}
+        {rooms.rows.length > 0 && (
+          <ul className="farm-adb-list">
+            {rooms.rows.map((r) => (
+              <li key={r.id || r.model}>
+                <span className={`pill ${roomBadge(r.verdict)[0]}`}>{roomBadge(r.verdict)[1]}</span>
+                <span className="farm-rooms-model">{r.model || r.id}</span>
+                <span className="farm-adb-note">{roomText(r)}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
       {/* ---- Rail perangkat ---- */}
       <div className="farm-rail">
-        {rows.length === 0 && <div className="card farm-dev"><span className="muted">Belum ada HP terhubung. Sambungkan HP ke PC dengan kabel USB, lalu aktifkan USB debugging di HP.</span></div>}
+        {rows.length === 0 && <div className="card farm-dev"><span className="muted">{adbErr
+          ? `ADB tidak terbaca: ${adbErr}`
+          : 'Belum ada HP terhubung. Sambungkan HP ke PC dengan kabel USB, lalu aktifkan USB debugging di HP.'}</span></div>}
         {rows.map((d) => (
           <div key={d.id} className={`card farm-dev ${sel === d.id ? 'sel' : ''}`} onClick={() => setSel(d.id)}>
             <div className="farm-dev-top">
@@ -223,20 +359,20 @@ export default function Farm() {
                 <div className="farm-dev-ip" title="IP keluar yang dilihat platform (dari sisi HP)">
                   <span className="k">IP</span>
                   <code>{d.details.ip || 'belum ada IP'}</code>
-                  {d.details.conn === 'wifi' && <span className="pill p-bad" title="Create via WiFi melanggar SOP, matikan WiFi, pakai data SIM">WiFi ⚠</span>}
-                  {d.details.conn === 'data' && <span className="pill p-ok">Data SIM</span>}
+                  {d.details.conn === 'wifi' && <span className="pill p-bad" title="Create via WiFi melanggar SOP, matikan WiFi, pakai data SIM">WiFi</span>}
+                  {d.details.conn === 'data' && <span className="pill p-done">Data SIM</span>}
                   {!d.details.conn && <span className="pill p-wait">Tanpa koneksi</span>}
                 </div>
                 <div className="farm-dev-meta" style={{ marginTop: 4 }}>
-                  <span>SIM <b className={d.details.simOk ? 'sim-ok' : 'sim-bad'}>{d.details.simOk ? '✓ terdaftar' : '✗ tidak aktif'}</b>{d.details.simOk ? ` (${d.details.radio.tech})` : ''}</span>
-                  <span>Baterai <b>{d.details.battery}%</b>{d.details.powered ? ' ⚡' : ''}</span>
+                  <span>SIM <b className={d.details.simOk ? 'sim-ok' : 'sim-bad'}>{d.details.simOk ? 'Terdaftar' : 'Tidak aktif'}</b>{d.details.simOk ? ` (${d.details.radio.tech})` : ''}</span>
+                  <span>Baterai <b>{d.details.battery}%</b>{d.details.powered ? ' (Mengisi)' : ''}</span>
                 </div>
               </div>
             )}
             <div className="farm-dev-note">
-              {d.activeJob ? (d.activeJob.note || d.activeJob.status)
+              {d.activeJob ? String(d.activeJob.note || d.activeJob.status).replace(/\s*—\s*/g, ': ')
                 : d.lockReason ? d.lockReason
-                : d.lastJob ? `Terakhir: ${d.lastJob.status}, ${d.lastJob.note || ''}` : 'Siap'}
+                : d.lastJob ? `Terakhir: ${d.lastJob.status}, ${String(d.lastJob.note || '').replace(/\s*—\s*/g, ': ')}` : 'Siap'}
             </div>
           </div>
         ))}
@@ -294,23 +430,47 @@ export default function Farm() {
               </div>
               <div className="farm-jobs">
                 {jobs.length === 0 && <p className="muted" style={{ margin: 0 }}>Belum ada job.</p>}
-                {jobs.map((j) => (
-                  <div className="farm-job" key={j.id}>
-                    <span className={`pill ${jobChip(j.status)}`}>{jobLabel(j.status)}</span>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div className="farm-job-note" title={j.note}>{j.deviceId} · {j.platform}{j.payload && j.payload.navOnly ? ' · nav-only' : ''}: {j.note || ''}</div>
-                      <div className={`farm-progress ${j.status === 'working' ? 'anim' : ''}`}><i style={{ width: `${Math.round(100 * (j.step || 0) / (j.total || 9))}%` }} /></div>
+                {jobs.map((j) => {
+                  const noteTxt = String(j.note || '').replace(/\s*—\s*/g, ': ');
+                  const jobTitle = j.payload && j.payload.username
+                    ? '@' + j.payload.username
+                    : (j.payload && j.payload.firstname ? `${j.payload.firstname} ${j.payload.lastname}` : j.id.slice(0, 8));
+                  return (
+                  <div className={`farm-job ${j.status === 'working' ? 'is-working' : ''}`} key={j.id}>
+                    <div className="farm-job-top">
+                      <span className={`pill ${jobChip(j.status)}`}>{jobLabel(j.status)}</span>
+                      <div className="farm-job-main">
+                        <div className="farm-job-head">
+                          <strong>{jobTitle}</strong>
+                          <span className="muted">{j.deviceId.slice(0, 8)} · {(j.platform || '').toUpperCase()}{j.payload && j.payload.deviceUser !== undefined ? ` · Room ${j.payload.deviceUser}` : ''}{j.payload && j.payload.navOnly ? ' · Nav-only' : ''} · Langkah {Math.max(j.step || 0, 0)}/{j.total || 9}</span>
+                        </div>
+                        <div className="farm-job-note" title={noteTxt}>{noteTxt || 'Menunggu...'}</div>
+                      </div>
+                      {j.status === 'working' && (
+                        <button type="button" className="btn-danger-ghost farm-stop-btn" onClick={() => cancelJob(j.id)}>Stop</button>
+                      )}
                     </div>
+                    <div className={`farm-progress ${j.status === 'working' ? 'anim' : ''}`}><i style={{ width: `${Math.max(3, Math.round(100 * Math.max(j.step || 0, 0) / (j.total || 9)))}%` }} /></div>
                     {j.status === 'working' && (
-                      <span className="farm-thumb-btns">
-                        <input className="inp" style={{ width: 86 }} inputMode="numeric" placeholder="OTP"
-                          value={otp[j.id] || ''} onChange={(e) => setOtp((o) => ({ ...o, [j.id]: e.target.value }))} />
-                        <button className="btn-ghost" onClick={() => submitOtp(j.id)}>Tempel</button>
-                        <button className="btn-ghost" onClick={() => autoOtp(j.id)}>Auto</button>
-                      </span>
+                      <div className="farm-job-inputs">
+                        <div className="farm-input-group">
+                          <input className="inp" inputMode="tel" placeholder="Nomor HP (08...)"
+                            value={phone[j.id] || ''} onChange={(e) => setPhone((o) => ({ ...o, [j.id]: e.target.value }))}
+                            onKeyDown={(e) => { if (e.key === 'Enter') submitPhone(j.id); }} />
+                          <button type="button" className="btn-primary" onClick={() => submitPhone(j.id)}>Kirim No. HP</button>
+                        </div>
+                        <div className="farm-input-group">
+                          <input className="inp" inputMode="numeric" placeholder="Kode OTP"
+                            value={otp[j.id] || ''} onChange={(e) => setOtp((o) => ({ ...o, [j.id]: e.target.value }))}
+                            onKeyDown={(e) => { if (e.key === 'Enter') submitOtp(j.id); }} />
+                          <button type="button" className="btn-ghost" onClick={() => submitOtp(j.id)}>Tempel OTP</button>
+                          <button type="button" className="btn-ghost" onClick={() => autoOtp(j.id)} title="Ambil otomatis dari inbox temp-mail">Auto OTP</button>
+                        </div>
+                      </div>
                     )}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
@@ -345,18 +505,19 @@ export default function Farm() {
           ? now - startedAt
           : (watch && watch.updated_at ? new Date(watch.updated_at).getTime() - startedAt : 0);
         return (
-          <div className={`act-float ${st === 'done' ? 'ok' : st === 'failed' ? 'err' : ''}`} role="status">
+          <div className={`act-float ${st === 'done' ? 'ok' : (st === 'failed' || st === 'cancelled') ? 'err' : ''}`} role="status">
             <div className="act-float-head">
-              <span className="act-orb">{st === 'working' ? <span className="act-spinner" /> : st === 'done' ? '✓' : '✗'}</span>
+              <span className="act-orb">{st === 'working' ? <span className="act-spinner" /> : st === 'done' ? '✓' : st === 'cancelled' ? '■' : '✗'}</span>
               <div>
                 <div className="act-title">
-                  {st === 'working' ? 'Create berjalan' : st === 'done' ? 'Create sukses' : 'Create gagal'}: {watchJob.deviceId}
+                  {st === 'working' ? 'Create berjalan' : st === 'done' ? 'Create sukses' : st === 'cancelled' ? 'Create dibatalkan' : 'Create gagal'}: {watchJob.deviceId}
                   {watchJob.payload && watchJob.payload.navOnly ? ' (nav-only)' : ''}
                 </div>
                 <div className="act-sub">
                   {st === 'working' && `Tahap ${step}/${total}${note ? ` · ${note}` : ''} · ${fmtDur(durMs)}`}
                   {st === 'done' && `Selesai dalam ${fmtDur(durMs)}. Cek hasilnya di halaman Akun.`}
                   {st === 'failed' && `Gagal setelah ${fmtDur(durMs)}, ${note || 'lihat log server'}`}
+                  {st === 'cancelled' && `Dibatalkan setelah ${fmtDur(durMs)}, ${note || ''}`}
                 </div>
               </div>
               <button className="act-close" title="Tutup" onClick={closeWatch}>×</button>

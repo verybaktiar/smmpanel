@@ -14,6 +14,17 @@ const maskProxy = (v) => {
   return s.slice(0, 14) + '…';
 };
 
+// Hasil satu tes: teks pendek untuk kolom, detail mentah penyedia untuk tooltip.
+// `kind` dari server memisahkan penolakan izin IP dari proxy yang benar-benar mati.
+const fmtTest = (r) => {
+  const ok = r && !r.error && r.ok !== false && r.valid !== false && r.success !== false;
+  if (ok) {
+    const ms = r.responseTime || r.ms || r.latency;
+    return { ok: true, text: ms ? `${ms} ms` : 'OK', note: r.message || '' };
+  }
+  return { ok: false, text: (r && r.error) || 'Mati', note: (r && r.detail) || '', kind: (r && r.kind) || '' };
+};
+
 // IP keluar dari string proxy: format Bright Data (-ip-1.2.3.4) atau host:port biasa.
 const exitIpOf = (v) => {
   const m = /-ip-(\d+\.\d+\.\d+\.\d+)/.exec(String(v || ''));
@@ -22,12 +33,23 @@ const exitIpOf = (v) => {
   return /^\d+\.\d+\.\d+\.\d+/.test(s) ? s.split(':')[0] : null;
 };
 
+// Status proxy hasil alokasi otomatis dibedakan dari stok biasa: operator perlu
+// tahu mana yang masih disiapkan, sudah terikat akun, dan mana yang bekas signup.
+const PX_STATUS = {
+  unused: ['p-wait', 'Bebas'],
+  reserved: ['p-run', 'Disiapkan'],
+  active: ['p-ok', 'Terpakai'],
+  burned: ['p-bad', 'Bekas'],
+};
+
 export default function Proxy() {
   const [list, setList] = useState([]);
   const [values, setValues] = useState('');
   const [edit, setEdit] = useState(null);
   const [msg, setMsg] = useState(null);
   const [testing, setTesting] = useState(null);
+  const [testingAll, setTestingAll] = useState(false);
+  const [testDone, setTestDone] = useState({ done: 0, total: 0 });
   const [tested, setTested] = useState({}); // id -> {ok, text}
   const [scores, setScores] = useState([]); // skor kelayakan IP dari riwayat probe
   const [signups, setSignups] = useState({}); // ip -> riwayat signup (badge IP terpakai/burn)
@@ -95,14 +117,64 @@ export default function Proxy() {
     setMsg(r.error ? { ok: false, text: 'Gagal: ' + r.error } : { ok: true, text: `${r.assigned} akun di-assign.` });
   };
 
+  // Satu baris dites lewat endpoint yang sama dengan tombol per baris.
+  const testOne = async (p) => {
+    const r = await api('/api/proxy/test', { method: 'POST', body: JSON.stringify({ proxy: p.value }) })
+      .catch(() => ({ error: 'Server tak terjangkau' }));
+    const f = fmtTest(r);
+    setTested((m) => ({ ...m, [p.id]: f }));
+    return f;
+  };
+
   const test = async (p) => {
     setTesting(p.id);
-    const r = await api('/api/proxy/test', { method: 'POST', body: JSON.stringify({ proxy: p.value }) }).catch(() => ({ error: 'timeout' }));
+    await testOne(p);
     setTesting(null);
-    const ok = r && !r.error && (r.ok !== false && r.valid !== false && r.success !== false);
-    setTested((m) => ({ ...m, [p.id]: ok
-      ? { ok: true, text: r.ms ? `${r.ms} ms` : r.latency ? `${r.latency} ms` : 'OK' }
-      : { ok: false, text: (r && r.error) || 'Mati' } }));
+  };
+
+  // Tes semua: 3 tes berjalan bersamaan supaya 8 proxy mati (10 dtk timeout
+  // masing-masing) tidak menunggu 80 dtk berurutan.
+  const testAll = async () => {
+    if (testingAll || !list.length) return;
+    setTestingAll(true);
+    setTested({});
+    setTestDone({ done: 0, total: list.length });
+    const queue = [...list];
+    const outcomes = [];
+    let done = 0;
+    const worker = async () => {
+      const p = queue.shift();
+      if (!p) return;
+      outcomes.push(await testOne(p));
+      done += 1;
+      setTestDone({ done, total: list.length });
+      await worker();
+    };
+    await Promise.all([worker(), worker(), worker()]);
+    setTestingAll(false);
+    // Penolakan izin IP dan kuota habis bukan proxy mati: keduanya masih menjawab
+    // dan bisa dipakai lagi setelah IP didaftarkan atau traffic diisi. Dihitung
+    // terpisah supaya ringkasan tidak menyebut semuanya mati.
+    const okN = outcomes.filter((r) => r.ok).length;
+    const ipN = outcomes.filter((r) => !r.ok && r.kind === 'ip').length;
+    const quotaN = outcomes.filter((r) => !r.ok && r.kind === 'quota').length;
+    const deadN = outcomes.length - okN - ipN - quotaN;
+    if (okN === outcomes.length) {
+      setMsg({ ok: true, text: `Tes semua selesai: ${outcomes.length} proxy hidup.` });
+    } else {
+      const parts = [`${okN} hidup`, `${deadN} mati`];
+      if (quotaN) parts.push(`${quotaN} kuota habis`);
+      if (ipN) parts.push(`${ipN} menolak IP ini`);
+      const tip = quotaN && ipN
+        ? ' Kuota habis tinggal top up; penolakan IP berarti IP komputermu belum didaftarkan di penyedia.'
+        : quotaN ? ' Kuota habis tinggal top up di penyedia.'
+          : ipN ? ' Penolakan IP berarti IP komputermu belum didaftarkan di penyedia.' : '';
+      setMsg({
+        warn: deadN === 0,
+        ok: false,
+        text: `Tes semua selesai: ${parts.join(', ')}.${tip}${deadN ? ' Alasan tiap proxy ada di kolom Tes.' : ''}`,
+      });
+    }
   };
 
   const syncPool = async () => {
@@ -158,7 +230,7 @@ export default function Proxy() {
         </div>
       </div>
 
-      {msg && <p className={`farm-msg ${msg.ok ? 'ok' : 'bad'}`}>{msg.text}</p>}
+      {msg && <p className={`farm-msg ${msg.warn ? 'warn' : msg.ok ? 'ok' : 'bad'}`}>{msg.text}</p>}
 
       <form className="card" onSubmit={save}>
         <h3>{edit ? `Edit #${edit.id}` : 'Tambah Proxy'}</h3>
@@ -299,7 +371,12 @@ export default function Proxy() {
       )}
 
       <div className="card table-wrap">
-        <h3>Daftar ({list.length})</h3>
+        <div className="px-head">
+          <h3>Daftar ({list.length})</h3>
+          <button className="btn-ghost px-test px-test-all" disabled={testingAll || testing !== null || list.length === 0} onClick={testAll}>
+            {testingAll ? `Mengtes ${testDone.done}/${testDone.total}` : 'Tes semua'}
+          </button>
+        </div>
         {list.length === 0 ? <p className="muted">Belum ada proxy. Nanti saat beli proxy, tempel di form paling atas.</p> : (
           <table className="tbl">
             <thead><tr><th>ID</th><th>Proxy</th><th>Status</th><th>Tes</th><th>Aksi</th></tr></thead>
@@ -309,13 +386,22 @@ export default function Proxy() {
                 return (
                 <tr key={p.id}>
                   <td className="muted">#{p.id}</td>
-                  <td><code className="px-val">{maskProxy(p.value)}</code>{sip && <SgBadge ip={sip} />}</td>
-                  <td><span className={`pill ${(p.status || 'unused') === 'unused' ? 'p-wait' : 'p-run'}`}>
-                    {(p.status || 'unused') === 'unused' ? 'Bebas' : 'Terpakai'}</span></td>
+                  <td>
+                    <code className="px-val">{maskProxy(p.value)}</code>{sip && <SgBadge ip={sip} />}
+                    {p.label && <div className="px-label">{p.label}</div>}
+                  </td>
+                  <td>{(() => {
+                    const [cls, txt] = PX_STATUS[p.status || 'unused'] || ['p-run', p.status || 'unused'];
+                    return <span className={`pill ${cls}`}>{txt}</span>;
+                  })()}</td>
                   <td style={{ whiteSpace: 'nowrap' }}>
-                    <button className="btn-ghost px-test" disabled={testing === p.id} onClick={() => test(p)}>
-                      {testing === p.id ? 'Tes...' : 'Tes'}</button>
-                    {tested[p.id] && <span className={tested[p.id].ok ? 'px-ok' : 'px-bad'}>{tested[p.id].text}</span>}
+                    <button className="btn-ghost px-test" disabled={testing === p.id || testingAll} onClick={() => test(p)}>
+                      {testing === p.id || (testingAll && !tested[p.id]) ? 'Tes...' : 'Tes'}</button>
+                    {tested[p.id] && (
+                      <span className={tested[p.id].ok ? 'px-ok' : tested[p.id].kind === 'ip' ? 'px-warn' : 'px-bad'} title={tested[p.id].note || undefined}>
+                        {tested[p.id].text}
+                      </span>
+                    )}
                   </td>
                   <td style={{ whiteSpace: 'nowrap' }}>
                     <button className="btn-ghost" style={{ marginRight: 6 }} onClick={() => { setEdit(p); setValues(p.value); }}>Edit</button>

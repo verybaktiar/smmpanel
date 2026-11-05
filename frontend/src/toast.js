@@ -29,6 +29,8 @@ function inject() {
 .toast.info .toast-ico { background: rgba(73,79,223,.16); color: #8f97ff; border: 1px solid rgba(73,79,223,.4); }
 .toast-txt { font-size: 12.5px; color: #e8eaee; line-height: 1.5; white-space: pre-wrap; word-break: break-word; padding-top: 2px; }
 .toast-bar { height: 3px; border-radius: 3px; margin-top: 8px; overflow: hidden; background: rgba(255,255,255,.08); }
+.toast-act { font-family: inherit; margin-top: 8px; display: block; width: 100%; border: 1px solid rgba(255,255,255,.18); background: rgba(255,255,255,.07); color: #f4f4f4; border-radius: 9999px; padding: 7px 14px; font-size: 12px; font-weight: 600; cursor: pointer; }
+.toast-act:hover { background: rgba(255,255,255,.13); }
 .toast-bar i { display: block; height: 100%; border-radius: 3px; animation: toastbar linear both; }
 .toast.ok .toast-bar i { background: #2dd4a7; }
 .toast.err .toast-bar i { background: #ff7a86; }
@@ -42,7 +44,7 @@ function inject() {
   document.head.appendChild(s);
 }
 
-function show(kind, message, ms = 3000) {
+function show(kind, message, ms = 3000, action = null) {
   inject();
   const wrap = document.querySelector('.toast-wrap') || (() => {
     const w = document.createElement('div');
@@ -58,6 +60,21 @@ function show(kind, message, ms = 3000) {
   el.innerHTML = `<span class="toast-ico"></span><div style="flex:1;min-width:0"><div class="toast-txt"></div><div class="toast-bar"><i style="animation-duration:${ms}ms"></i></div></div>`;
   el.querySelector('.toast-ico').textContent = ico;
   el.querySelector('.toast-txt').textContent = String(message || '');
+  // Tombol aksi di dalam toast (mis. Batalkan penghapusan). stopPropagation agar
+  // klik tombol tidak memicu tutup-toast dari listener klik di el.
+  if (action) {
+    const body = el.querySelector('div[style]');
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'toast-act';
+    btn.textContent = action.label;
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      close();
+      action.onClick();
+    });
+    body.insertBefore(btn, body.querySelector('.toast-bar'));
+  }
   wrap.appendChild(el);
   // Flip ke .show setelah reflow agar transisi spring overshoot jalan (pola kinetics: state tersembunyi -> .show).
   void el.offsetWidth;
@@ -74,3 +91,5 @@ function show(kind, message, ms = 3000) {
 export const toastOk = (m, ms) => show('ok', m, ms || 3000);
 export const toastErr = (m, ms) => show('err', m, ms || 4200);
 export const toastInfo = (m, ms) => show('info', m, ms || 3200);
+// Toast dengan satu tombol aksi (default 10 dtk, mis. Batalkan penghapusan).
+export const toastAction = (m, action, ms) => show('info', m, ms || 10000, action);

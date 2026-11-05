@@ -1,84 +1,133 @@
 /* Gaya bersama halaman React */
-.card { background: linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,.012)); border: 1px solid rgba(255,255,255,.09); border-radius: 20px; padding: 20px; margin-bottom: 14px; }
-.card h3 { margin: 0 0 12px; font-size: 16px; }
+.card { background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.014)); border: 1px solid rgba(255,255,255,.11); border-radius: 18px; padding: 20px 22px; margin-bottom: 16px; }
+/* Hero halaman (R-31): dipakai banyak halaman yang tidak mengimpor Accounts.css.
+   Tanpa aturan ini judul, subjudul, dan tombol aksi menumpuk rata kiri alih-alih
+   berada dalam satu baris dengan aksi di kanan. */
+.acc-hero { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; border: 1px solid rgba(255,255,255,.09); border-radius: 20px; padding: 20px 24px; margin-bottom: 16px; background: rgba(255,255,255,.02); }
+.acc-hero .page-title { margin: 0 0 2px; }
+/* Tint platform menandai halaman mana yang sedang dibuka. */
+.acc-fb { background: linear-gradient(120deg, rgba(24,119,242,.18), transparent 60%), rgba(255,255,255,.02); }
+.acc-ig { background: linear-gradient(120deg, rgba(221,42,123,.16), transparent 60%), rgba(255,255,255,.02); }
+.acc-tiktok { background: linear-gradient(120deg, rgba(37,244,238,.10), transparent 60%), rgba(255,255,255,.02); }
+.card h3 { margin: 0 0 12px; font-size: 16px; font-weight: 650; letter-spacing: -.01em; color: #f5f6f8; }
 /* R-03: minmax(0,1fr) agar kolom boleh menyusut di bawah lebar kontennya
    (tabel/URL panjang tidak lagi memaksa kartu melebar). */
 .grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 @media (max-width: 720px) { .grid2 { grid-template-columns: minmax(0, 1fr); } }
-.inp { background: rgba(255,255,255,.02); border: 1px solid rgba(255,255,255,.09); color: #fff; border-radius: 12px; padding: 10px 14px; font-size: 13px; width: 100%; }
+.inp { background: rgba(14,16,21,.65); border: 1px solid rgba(255,255,255,.18); color: #f5f6f8; border-radius: 10px; padding: 10px 14px; font-size: 13px; width: 100%; transition: border-color .16s ease, box-shadow .16s ease, background-color .16s ease; }
+.inp:hover:not(:disabled) { border-color: rgba(255,255,255,.28); }
+.inp:focus-visible { outline: none; border-color: #7c82ff; box-shadow: 0 0 0 3px rgba(124,130,255,.22); background: rgba(18,21,28,.85); }
+.inp::placeholder { color: #7f8a96; }
 /* R-03: input/select min 42px agar tap target nyaman di desktop dan layar sentuh. */
 input.inp, select.inp { min-height: 42px; }
-select.inp option { background: #191c1f; }
+select.inp option { background: #191c1f; color: #f5f6f8; }
 textarea.inp { min-height: 80px; resize: vertical; }
-label.f { font-size: 12px; color: #8d969e; display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
-/* Sistem tombol global: satu hierarki dipakai semua halaman.
-   Primary = aksi utama solid ungu (konsekuen #494fdf); ghost = aksi sekunder;
-   danger-ghost = merusak; press spring dari kinetics (reduced-motion dinonaktifkan di bawah). */
-.btn-primary { background: #494fdf; color: #fff; border: none; border-radius: 9999px; padding: 10px 22px; font-size: 13px; font-weight: 600; cursor: pointer; min-height: 42px; transition: background .18s, transform .18s cubic-bezier(0.34, 1.56, 0.64, 1), opacity .18s; }
-.btn-primary:hover:not(:disabled) { background: #5b61e8; }
+label.f { font-size: 12px; color: #98a2ad; display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+/* Sistem tombol global (R-11 variasi radius): tombol memakai radius 10px tegas,
+   badge/pill memakai 9999px kapsul, kartu memakai 18px agar fungsi visual terbedakan.
+   Primary = aksi utama solid ungu (#494fdf); ghost = aksi sekunder;
+   danger-ghost = merusak/stop; press spring dari kinetics. */
+.btn-primary { display: inline-flex; align-items: center; justify-content: center; gap: 6px; background: #494fdf; color: #fff; border: 1px solid rgba(255,255,255,.12); border-radius: 10px; padding: 9px 20px; font-size: 13px; font-weight: 600; cursor: pointer; min-height: 42px; transition: background .18s, transform .18s cubic-bezier(0.34, 1.56, 0.64, 1), opacity .18s, box-shadow .18s; }
+.btn-primary:hover:not(:disabled) { background: #585ee8; box-shadow: 0 4px 14px rgba(73,79,223,.32); }
 .btn-primary:active:not(:disabled) { transform: scale(.96); }
-.btn-primary:disabled { opacity: .5; cursor: not-allowed; }
-.btn-ghost { background: rgba(244,244,244,.07); border: 1px solid rgba(255,255,255,.09); color: #f4f4f4; border-radius: 9999px; padding: 8px 18px; font-size: 13px; cursor: pointer; min-height: 42px; transition: background .18s, border-color .18s, transform .18s cubic-bezier(0.34, 1.56, 0.64, 1); }
-.btn-ghost:hover:not(:disabled) { background: rgba(244,244,244,.13); }
+.btn-primary:disabled { opacity: .48; cursor: not-allowed; }
+.btn-ghost { display: inline-flex; align-items: center; justify-content: center; gap: 6px; background: rgba(244,244,244,.07); border: 1px solid rgba(255,255,255,.16); color: #f4f4f4; border-radius: 10px; padding: 8px 16px; font-size: 13px; font-weight: 500; cursor: pointer; min-height: 42px; transition: background .18s, border-color .18s, transform .18s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.btn-ghost:hover:not(:disabled) { background: rgba(244,244,244,.13); border-color: rgba(255,255,255,.26); }
 .btn-ghost:active:not(:disabled) { transform: scale(.96); }
-.btn-ghost:disabled { opacity: .4; cursor: not-allowed; }
-.btn-danger-ghost { background: transparent; border: 1px solid rgba(226,59,74,.4); color: #ff7a86; border-radius: 9999px; padding: 7px 14px; font-size: 12px; cursor: pointer; min-height: 42px; transition: background .18s, border-color .18s, color .18s, transform .18s cubic-bezier(0.34, 1.56, 0.64, 1); }
-.btn-danger-ghost:hover:not(:disabled) { background: rgba(226,59,74,.08); border-color: rgba(226,59,74,.6); }
+.btn-ghost:disabled { opacity: .42; cursor: not-allowed; }
+.btn-danger-ghost { display: inline-flex; align-items: center; justify-content: center; gap: 6px; background: rgba(226,59,74,.08); border: 1px solid rgba(255,122,134,.42); color: #ff8590; border-radius: 10px; padding: 8px 15px; font-size: 12.5px; font-weight: 600; cursor: pointer; min-height: 42px; transition: background .18s, border-color .18s, color .18s, transform .18s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.btn-danger-ghost:hover:not(:disabled) { background: rgba(226,59,74,.16); border-color: rgba(255,122,134,.68); color: #ffa1aa; }
 .btn-danger-ghost:active:not(:disabled) { transform: scale(.96); }
-.btn-danger-ghost:disabled { opacity: .4; cursor: not-allowed; }
+.btn-danger-ghost:disabled { opacity: .42; cursor: not-allowed; }
 @media (prefers-reduced-motion: reduce) {
   .btn-primary, .btn-ghost, .btn-danger-ghost { transition: none; }
   .btn-primary:active, .btn-ghost:active, .btn-danger-ghost:active { transform: none; }
 }
-.muted { color: #8d969e; }
+.muted { color: #98a2ad; }
 .badge { padding: 3px 11px; border-radius: 9999px; font-size: 11px; font-weight: 600; display: inline-block; }
-.b-active { background: rgba(0,168,126,.18); color: #2dd4a7; }
-.b-warn { background: rgba(240,164,40,.16); color: #f0a428; }
-.b-failed { background: rgba(226,59,74,.14); color: #ff7a86; }
-.b-done { background: rgba(0,168,126,.18); color: #2dd4a7; }
-.b-pending { background: rgba(236,126,0,.15); color: #fbbf24; }
-.b-inactive { background: rgba(141,150,158,.15); color: #8d969e; }
-.b-fb { background: rgba(24,119,242,.16); color: #5ea1ff; }
-.b-ig { background: rgba(221,42,123,.15); color: #f06292; }
-.b-tiktok { background: rgba(37,244,238,.12); color: #5eead4; }
+.b-active { background: rgba(0,168,126,.18); color: #34d9ae; }
+.b-warn { background: rgba(240,164,40,.16); color: #f6b23b; }
+.b-failed { background: rgba(226,59,74,.16); color: #ff8590; }
+.b-done { background: rgba(0,168,126,.18); color: #34d9ae; }
+.b-pending { background: rgba(236,126,0,.16); color: #fbbf24; }
+.b-inactive { background: rgba(152,162,173,.15); color: #a3adb8; }
+.b-fb { background: rgba(24,119,242,.18); color: #6ca8ff; }
+.b-ig { background: rgba(221,42,123,.16); color: #f4729e; }
+.b-tiktok { background: rgba(37,244,238,.14); color: #5eead4; }
 /* R-31: pill status global agar konsisten di semua halaman. */
 /* R-03: min-height 30px agar pill cukup terbaca/tappable utk elemen interaktif. */
-.pill { display: inline-block; font-size: 11.5px; font-weight: 600; border-radius: 9999px; padding: 4px 12px; border: 1px solid transparent; white-space: nowrap; min-height: 30px; line-height: 20px; box-sizing: border-box; }
-.p-done { color: #4ade80; border-color: rgba(74,222,128,.35); background: rgba(74,222,128,.08); }
-.p-run { color: #fbbf24; border-color: rgba(251,191,36,.35); background: rgba(251,191,36,.08); }
-.p-wait { color: #9aa0aa; border-color: rgba(154,160,170,.35); background: rgba(154,160,170,.08); }
-.p-bad { color: #ff7a86; border-color: rgba(226,59,74,.4); background: rgba(226,59,74,.08); }
-/* R-31: tombol hapus/batal ghost global (dipakai Likes + AutoCreate). */
-.btn-danger-ghost { border: 1px solid rgba(226,59,74,.4); color: #ff7a86; border-radius: 9999px; padding: 7px 14px; font-size: 12px; cursor: pointer; background: transparent; }
-/* Scroll horizontal tabel berlaku global (dulu dobel di Accounts/Warming saja). */
+.pill { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 600; border-radius: 9999px; padding: 4px 12px; border: 1px solid transparent; white-space: nowrap; min-height: 30px; line-height: 20px; box-sizing: border-box; }
+.p-done { color: #4ade80; border-color: rgba(74,222,128,.38); background: rgba(74,222,128,.10); }
+.p-run, .p-warn { color: #fbbf24; border-color: rgba(251,191,36,.38); background: rgba(251,191,36,.10); }
+.p-wait { color: #a6b0bb; border-color: rgba(166,176,187,.35); background: rgba(166,176,187,.09); }
+.p-bad, .p-fail { color: #ff8590; border-color: rgba(226,59,74,.44); background: rgba(226,59,74,.10); }
+/* Scroll horizontal tabel berlaku global. */
 .table-wrap { overflow-x: auto; }
 .table-wrap .tbl { min-width: 560px; }
-/* Potong teks panjang di sel (dulu dobel dengan nilai beda di 2 css). */
+/* Potong teks panjang di sel. */
 .cut { max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
-.tbl thead th { font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: #8d969e; text-align: left; padding: 12px 14px; background: rgba(255,255,255,.03); }
-/* R-03: baris tab AI harus boleh wrap di layar sempit (sebelumnya inline flex tanpa wrap). */
+.tbl thead th { font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: #98a2ad; text-align: left; padding: 12px 14px; background: rgba(255,255,255,.03); }
+/* R-03: baris tab AI harus boleh wrap di layar sempit. */
 .ai-tabs { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
-/* R-27: loading spinner global — bahasa yang sama dengan Dashboard/FbDashboard (dulunya
-   terduplikasi per-page CSS; halaman lain tanpa spinner tampil kosong saat fetch). */
-.loading { display: flex; align-items: center; gap: 10px; color: #8d969e; font-size: 13px; padding: 18px; }
+/* R-27: loading spinner global. */
+.loading { display: flex; align-items: center; gap: 10px; color: #98a2ad; font-size: 13px; padding: 18px; }
 .loading::before { content: ''; width: 16px; height: 16px; border: 2px solid rgba(255,255,255,.25); border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; flex-shrink: 0; }
 @keyframes spin { to { transform: rotate(360deg); } }
-/* Konsistensi: tombol tutup panel kecil (dulunya terduplikasi di Accounts.css & Farm.css). */
-.act-close { margin-left: auto; background: none; border: none; color: #8d969e; font-size: 18px; cursor: pointer; line-height: 1; border-radius: 8px; width: 26px; height: 26px; flex-shrink: 0; }
+/* Konsistensi: tombol tutup panel kecil. */
+.act-close { margin-left: auto; background: none; border: none; color: #98a2ad; font-size: 18px; cursor: pointer; line-height: 1; border-radius: 8px; width: 32px; height: 32px; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; }
 .act-close:hover { background: rgba(255,255,255,.08); color: #fff; }
-.tbl td { padding: 13px 14px; border-bottom: 1px solid rgba(255,255,255,.05); vertical-align: middle; }
+.tbl td { padding: 13px 14px; border-bottom: 1px solid rgba(255,255,255,.06); vertical-align: middle; }
 .tbl tbody tr:hover { background: rgba(73,79,223,.08); }
-.empty { text-align: center; padding: 40px; color: #8d969e; }
+.empty { text-align: center; padding: 40px; color: #98a2ad; }
 /* Baris akun yang minta persetujuan (warming) / ditolak gate */
 .row-warn { background: rgba(251,191,36,.05); }
 .row-bad { background: rgba(226,59,74,.05); }
+/* Panel modal dasar (R-31): dipakai semua halaman. Ditaruh di ui.css, bukan di
+   Accounts.css, supaya modal tidak transparan saat halaman pertama yang dibuka
+   bukan halaman Akun (mis. Like FB atau Auto Komentar). */
+.modal { background: #1c1f24; border: 1px solid rgba(255,255,255,.1); border-radius: 20px; padding: 24px; width: min(380px, calc(100vw - 28px)); max-height: calc(100vh - 32px); overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+.modal h3 { margin: 0 0 4px; }
+.modal label { font-size: 12px; color: #8d969e; display: flex; flex-direction: column; gap: 6px; }
+.modal-btns { display: flex; gap: 8px; justify-content: flex-end; margin-top: 6px; }
+/* Hint di modal proxy: penjelasan sticky session DataImpulse. */
+.modal-hint { margin: 0; font-size: 12px; color: #8d969e; line-height: 1.55; }
+.modal-hint b { color: #d6d9de; }
+.modal-hint code { background: rgba(255,255,255,.06); border-radius: 6px; padding: 1px 6px; font-size: 11.5px; color: #f0b429; }
+@media (max-width: 380px) {
+  .modal-btns { flex-wrap: wrap; }
+}
+/* Modal global (R-31): semua modal inline (.overlay + .modal di halaman apapun) beranimasi
+   ala Command Palette Bloom dari kinetics: ikut spring masuk + konten stagger; keluar
+   fade singkat. */
+.overlay { position: fixed; inset: 0; background: rgba(0,0,0,.65); backdrop-filter: blur(3px); display: flex; align-items: center; justify-content: center; z-index: 50; animation: ov-in .3s ease both; }
+@keyframes ov-in { from { opacity: 0; } }
+@keyframes modal-in {
+  from { opacity: 0; transform: translateY(14px) scale(.94); }
+  70% { opacity: 1; }
+  to { opacity: 1; transform: none; }
+}
+.overlay .modal { animation: modal-in .5s cubic-bezier(.34,1.56,.64,1) both; }
+.overlay .modal > * { animation: mod-el .38s cubic-bezier(.16,1,.3,1) both; }
+.overlay .modal > *:nth-child(1) { animation-delay: .05s; }
+.overlay .modal > *:nth-child(2) { animation-delay: .1s; }
+.overlay .modal > *:nth-child(3) { animation-delay: .15s; }
+.overlay .modal > *:nth-child(4) { animation-delay: .2s; }
+.overlay .modal > *:nth-child(5) { animation-delay: .25s; }
+.overlay .modal > *:nth-child(6) { animation-delay: .3s; }
+@keyframes mod-el { from { opacity: 0; transform: translateY(6px); } }
+/* Keluar: fade cepat (0.18s): transisi JS di halaman menghapus elemen; biarkan .overlay
+   polos tanpa khusus out bila langsung unmount. */
+@media (prefers-reduced-motion: reduce) {
+  .overlay, .overlay .modal, .overlay .modal > * { animation: none; }
+}
+
 /* Progres ber-step */
 .steps { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }
-.step { display: flex; gap: 10px; align-items: center; padding: 10px 14px; border: 1px solid rgba(255,255,255,.09); border-radius: 12px; font-size: 13px; color: #8d969e; }
+.step { display: flex; gap: 10px; align-items: center; padding: 10px 14px; border: 1px solid rgba(255,255,255,.11); border-radius: 12px; font-size: 13px; color: #98a2ad; }
 .step.on { border-color: #494fdf; color: #fff; animation: pulse-b 1.5s infinite; }
-.step.ok { border-color: #00a87e; color: #2dd4a7; }
-.step.bad { border-color: #e23b4a; color: #ff7a86; }
+.step.ok { border-color: #00a87e; color: #34d9ae; }
+.step.bad { border-color: #e23b4a; color: #ff8590; }
 @keyframes pulse-b { 50% { background: rgba(73,79,223,.12); } }
-.bar { height: 6px; background: rgba(255,255,255,.07); border-radius: 9999px; overflow: hidden; margin: 10px 0; }
+.bar { height: 6px; background: rgba(255,255,255,.09); border-radius: 9999px; overflow: hidden; margin: 10px 0; }
 .bar > div { height: 100%; background: linear-gradient(90deg, #494fdf, #e61e49); transition: width .4s; }

@@ -1,0 +1,31 @@
+{
+  "name": "facebook-auto-signup",
+  "version": "1.0.0",
+  "description": "Auto-create Facebook accounts using Camoufox + Playwright + Ammail Worker",
+  "type": "module",
+  "main": "fb-signup.js",
+  "scripts": {
+    "signup": "node cli.js",
+    "signup:auto": "node cli.js --auto --headless",
+    "signup:batch": "node cli.js --auto --batch 5 --delay 10000",
+    "test": "node test-signup.js"
+  },
+  "keywords": [
+    "facebook",
+    "automation",
+    "signup",
+    "camoufox",
+    "playwright",
+    "temp-email"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "playwright": "^1.40.0",
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {},
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

@@ -12,6 +12,7 @@ const GROUPS = [
       { to: '/akun?platform=fb', icon: 'users', label: 'Akun Facebook', color: '#1877F2' },
       { to: '/posting?platform=fb', icon: 'pen', label: 'Posting FB', color: '#1877F2' },
       { to: '/likes-fb', icon: 'heart', label: 'Auto Like FB', color: '#1877F2' },
+      { to: '/comments-fb', icon: 'chat', label: 'Auto Komentar FB', color: '#1877F2' },
       { to: '/create-fb', icon: 'bot', label: 'FB Auto-Create', color: '#1877F2' },
     ],
   },
@@ -21,14 +22,24 @@ const GROUPS = [
       { to: '/akun?platform=ig', icon: 'users', label: 'Akun Instagram', color: '#f06292' },
       { to: '/posting?platform=ig', icon: 'camera', label: 'Posting IG', color: '#f06292' },
       { to: '/likes-ig', icon: 'heart', label: 'Like Instagram', color: '#f06292' },
+      { to: '/comments-ig', icon: 'chat', label: 'Komentar Instagram', color: '#f06292' },
       { to: '/create-ig', icon: 'bot', label: 'IG Auto-Create', color: '#f06292' },
     ],
   },
   {
     label: 'TikTok', dot: '#25F4EE',
     items: [
+      { to: '/akun?platform=tiktok', icon: 'users', label: 'Akun TikTok', color: '#25F4EE' },
       { to: '/tiktok', icon: 'music', label: 'TikTok Hub', color: '#25F4EE' },
       { to: '/create-tiktok', icon: 'bot', label: 'TikTok Auto-Create', color: '#25F4EE' },
+    ],
+  },
+  {
+    label: 'Gmail', dot: '#34A853',
+    items: [
+      { to: '/gmail-native/buat', icon: 'bolt', label: 'Buat Gmail', color: '#34A853' },
+      { to: '/gmail-native', icon: 'clock', label: 'Kelahiran', color: '#34A853' },
+      { to: '/gmail', icon: 'mail', label: 'Stok', color: '#34A853' },
     ],
   },
   {
@@ -36,7 +47,6 @@ const GROUPS = [
     items: [
       { to: '/akun', icon: 'users', label: 'Semua Akun' },
       { to: '/kesehatan', icon: 'grid', label: 'Kesehatan Akun' },
-      { to: '/gmail', icon: 'mail', label: 'Stok Gmail' },
       { to: '/history', icon: 'clock', label: 'Riwayat' },
       { to: '/monitoring', icon: 'chart', label: 'Monitoring' },
       { to: '/fleet', icon: 'phone', label: 'Fleet HP' },
@@ -49,6 +59,7 @@ const GROUPS = [
     label: 'Pendukung',
     items: [
       { to: '/warming', icon: 'flame', label: 'Warming' },
+      { to: '/sop', icon: 'ritual', label: 'SOP Akun Baru' },
       { to: '/engagement', icon: 'chat', label: 'Engagement' },
       { to: '/ai', icon: 'spark', label: 'AI Content' },
       { to: '/captcha', icon: 'lock', label: 'Captcha' },
@@ -71,8 +82,7 @@ export default function Layout() {
       if (loc.pathname === p && loc.search) return here === to;
       return false;
     }
-    // Item tanpa query: aktif juga bila di /akun dengan platform=... ? Tidak —
-    // biarkan grup platform yang menyala; /akun polos hanya untuk Semua Akun.
+    // Item tanpa query: aktif hanya untuk /akun polos (Semua Akun).
     return loc.pathname === to && !loc.search;
   };
   const menuBtnRef = useRef(null);

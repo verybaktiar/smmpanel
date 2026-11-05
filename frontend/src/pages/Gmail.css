@@ -10,6 +10,69 @@
   background: rgba(255,255,255,.08); color: #a8b0b8; white-space: nowrap; }
 .gmail-badge.ok { background: rgba(46,196,120,.15); color: #57d99a; border: 1px solid rgba(46,196,120,.35); }
 .gmail-badge.used { background: rgba(240,180,41,.12); color: #f0b429; border: 1px solid rgba(240,180,41,.3); }
+.gmail-badge.warn { background: rgba(240,150,20,.14); color: #ffb35c; border: 1px solid rgba(240,150,20,.32); }
+.gmail-badge.err { background: rgba(226,59,74,.14); color: #ff7a86; border: 1px solid rgba(226,59,74,.4); }
+
+/* Panel login live: muncul di kolom 2FA saat job berjalan (actpop dari Accounts.css).
+   Tujuannya satu: operator tahu proses jalan — tahap, email, durasi, log terakhir. */
+.login-live { margin-top: 10px; max-width: 420px; padding: 12px 14px; border-radius: 12px;
+  background: rgba(73,79,223,.06); border: 1px solid rgba(73,79,223,.3);
+  animation: actpop .35s cubic-bezier(.21,1.02,.73,1) both; }
+.login-live-head { display: flex; gap: 10px; align-items: center; }
+.login-orb { width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0;
+  border: 3px solid rgba(143,151,255,.2); border-top-color: #8f97ff; border-right-color: #8f97ff;
+  animation: spin .8s linear infinite; }
+.login-live-copy { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.login-live-copy b { font-size: 13.5px; }
+.login-live-copy span { font-size: 11.5px; color: #8d969e; }
+
+/* Indeterminate bar (kinetics): segmen 40% menyapu 1.4s loop, glide curve 0.16,1,0.3,1
+   dipertahankan; warna ikut aksen panel. Transisi muncul/hilang diberi spring. */
+.login-bar { position: relative; overflow: hidden; height: 4px; border-radius: 9999px;
+  background: rgba(255,255,255,.07); margin-top: 10px; }
+.login-bar span { position: absolute; inset: 0; width: 40%; border-radius: 9999px;
+  background: #8f97ff; animation: login-sweep 1.4s cubic-bezier(0.16, 1, 0.3, 1) infinite; }
+@keyframes login-sweep { 0% { transform: translateX(-100%); } 100% { transform: translateX(320%); } }
+
+.login-log { margin: 10px 0 0; padding: 8px 10px; border-radius: 8px; background: #101317;
+  border: 1px solid rgba(255,255,255,.08); color: #b9c2cb; font-size: 11px; line-height: 1.5;
+  max-height: 110px; overflow: auto; white-space: pre-wrap; word-break: break-word; }
+
+/* Konfirmasi HP: angka besar supaya operator langsung tahu harus ketuk apa di HP. */
+.login-confirm { display: flex; gap: 8px; align-items: center; margin-top: 10px;
+  padding: 8px 12px; border-radius: 8px; background: rgba(240,150,20,.1);
+  border: 1px solid rgba(240,150,20,.35); color: #ffb35c; font-size: 12.5px; }
+.login-confirm b { font-size: 22px; font-weight: 800; color: #ffb35c; font-variant-numeric: tabular-nums; }
+.login-confirm em { margin-left: 6px; font-style: normal; opacity: .8; }
+
+/* Alert captcha manual: satu bahasa dengan login-confirm (aksen kuning),
+   but teks aksi dicetak tebal — operator tahu browser yang mana dikerjakan. */
+.login-confirm.captcha { flex-wrap: wrap; }
+.login-confirm.captcha b { font-size: 12.5px; letter-spacing: .2px; }
+
+@media (max-width: 640px) {
+  .login-confirm { flex-wrap: wrap; }
+  .login-confirm em { margin-left: 0; width: 100%; }
+  .login-confirm.captcha em { width: 100%; }
+}
+
+/* Badge status jadi tombol riwayat: gaya sama dengan badge, tambah hover (klik-able). */
+.g2fa-hist { cursor: pointer; border: none; background: none; padding: 0; }
+.g2fa-hist .gmail-badge { transition: filter .2s; }
+.g2fa-hist:hover .gmail-badge { filter: brightness(1.35); }
+
+/* Modal riwayat login. */
+.hist-modal { max-width: 560px; }
+.hist-tbl { margin: 10px 0 0; font-size: 12px; }
+.hist-tbl th, .hist-tbl td { padding: 6px 8px; text-align: left; }
+.hist-time { white-space: nowrap; color: #a8b0b8; }
+.hist-detail { color: #a8b0b8; max-width: 180px; word-break: break-word; }
+
+@media (prefers-reduced-motion: reduce) {
+  .login-live { animation: none; }
+  .login-orb { animation-duration: 2.4s; }
+  .login-bar span { animation: none; opacity: .5; }
+}
 
 /* Log live: blok monospace gelap, tinggi tetap, scroll sendiri (R-27: bukan kosong tanpa kabar). */
 .gmail-log { margin: 12px 0 0; padding: 12px 14px; border-radius: 12px; background: #101317;
@@ -27,3 +90,21 @@
   .gmail-run-head { flex-direction: column; align-items: stretch; }
   .gmail-del { text-align: left; }
 }
+
+/* Kolom 2FA: tombol TOTP membuka kode live; 2FA seller merah; kosong redup.
+   Warna ikut token yang sudah ada (hijau/merah/redup) supaya satu palet. */
+.g2fa-btn { font-size: 12px; font-weight: 700; padding: 4px 12px; border-radius: 9999px; cursor: pointer;
+  background: rgba(46,196,120,.15); color: #57d99a; border: 1px solid rgba(46,196,120,.35); white-space: nowrap; }
+.g2fa-btn:hover { background: rgba(46,196,120,.28); }
+.gmail-badge.seller { background: rgba(226,59,74,.14); color: #ff7a86; border: 1px solid rgba(226,59,74,.4); }
+.g2fa-none { color: #8d969e; font-size: 12px; }
+
+/* Modal kode TOTP: angka besar + batang sisa jendela 30 detik (countdown fungsional,
+   bukan dekorasi). padding-left menyeimbangkan letter-spacing karakter terakhir. */
+.g2fa-modal { text-align: center; max-width: 360px; }
+.g2fa-email { word-break: break-all; }
+.g2fa-code { font-size: 42px; font-weight: 700; letter-spacing: 10px; padding-left: 10px; font-variant-numeric: tabular-nums; }
+.g2fa-bar { height: 4px; border-radius: 9999px; background: rgba(255,255,255,.07); overflow: hidden; }
+.g2fa-bar span { display: block; height: 100%; background: #57d99a; }
+.g2fa-err { color: #ff7a86; font-size: 13px; margin: 8px 0 0; }
+@media (prefers-reduced-motion: no-preference) { .g2fa-bar span { transition: width 1s linear; } }

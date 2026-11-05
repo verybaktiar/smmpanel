@@ -5,6 +5,8 @@ require('dotenv').config();
 const express = require('express');
 const http = require('http');
 const path = require('path');
+const fsp = require('fs').promises;
+const { spawn, exec } = require('child_process');
 const multer = require('multer');
 const db = require('./src/db');
 const { setupSecurity, requireApiKey, optionalApiKey } = require('./src/security');
@@ -20,6 +22,7 @@ const backupSystem = require('./src/backup-system');
 const captchaSolver = require('./src/captcha-solver');
 const notificationSystem = require('./src/notification-system');
 const aiContentGenerator = require('./src/ai-content-generator');
+const aiConfig = require('./src/ai-config');
 const followingAutomation = require('./src/following-automation');
 const FacebookAccountCreator = require('./src/fb-account-creator');
 const createRunner = require('./src/create-runner');
@@ -117,7 +120,10 @@ app.get('/api/stats', asyncH(async (req, res) => {
   const postedToday = (await db.rawAll(`SELECT COUNT(*) AS c FROM schedules WHERE status='done' AND date(posted_at)=date('now')`))[0].c;
   const pending = (await db.rawAll(`SELECT COUNT(*) AS c FROM schedules WHERE status='pending'`))[0].c;
   const logErrors = (await db.rawAll(`SELECT COUNT(*) AS c FROM post_log WHERE status IN ('post_failed','login_failed','error')`))[0].c;
-  res.json({ accounts, schedulesToday, postedToday, pending, logErrors });
+  // D10: dashboard memakai jendela 24 jam supaya sebanding dengan "Jadwal Hari Ini";
+  // total sepanjang waktu tetap dikirim untuk tooltip dan halaman Monitoring.
+  const logErrors24h = (await db.rawAll(`SELECT COUNT(*) AS c FROM post_log WHERE status IN ('post_failed','login_failed','error') AND created_at >= datetime('now','-1 day')`))[0].c;
+  res.json({ accounts, schedulesToday, postedToday, pending, logErrors, logErrors24h });
 }));
 
 // Tren 7 hari: jumlah akun beraktivitas per hari apa pun hasilnya (posted/login/gagal),
@@ -140,7 +146,18 @@ app.get('/api/accounts/ip-latest', asyncH(async (req, res) => {
 }));
 
 app.get('/api/accounts', asyncH(async (req, res) => {
-  res.json(await db.listAccounts());
+  const rows = await db.listAccounts();
+  // keepOpen: browser aktivasi akun ini masih dipegang proses keep-open.
+  for (const r of rows) {
+    if (r) r.keepOpen = createRunner.activationKeepOpen(r).open;
+  }
+  res.json(rows);
+}));
+
+// Peta { idAkun: keepOpen } — dipakai panel untuk menyegarkan penanda browser
+// terbuka berkala tanpa menarik ulang seluruh daftar akun.
+app.get('/api/keep-open', asyncH(async (req, res) => {
+  res.json(await createRunner.keepOpenMap());
 }));
 
 // ---- Phone Farm (ADB) ----
@@ -153,6 +170,88 @@ app.get('/api/farm/devices', asyncH(async (req, res) => {
   catch (e) { return res.status(503).json({ error: 'ADB tidak berjalan: ' + e.message.slice(0, 120) }); }
   const detailed = await Promise.all(devices.map((d) => farm.deviceInfo(d.id).catch(() => d)));
   res.json(detailed);
+}));
+
+// Diagnosa biner adb untuk panel: biner mana yang dipakai dan mana yang rusak.
+// Dipanggil saat halaman Phone Farm dibuka dan saat tombol cek ulang ditekan,
+// bukan ikut polling 8 detik: satu diagnosa menjalankan beberapa proses adb.
+app.get('/api/farm/adb', asyncH(async (req, res) => {
+  const rows = await farm.diagnose();
+  const sehat = rows.filter((r) => r.ok);
+  // Urutan sama dengan adbPath(): yang melihat HP menang, lalu kandidat sehat pertama.
+  const pilih = sehat.find((r) => r.devices > 0) || sehat[0] || null;
+  res.json({ dipakai: pilih ? pilih.bin : null, devices: pilih ? pilih.devices : 0, rows });
+}));
+
+// ---- Room tamu (user Android kedua): cek dukungan per HP ----
+// Probe jalan di latar: UI poll /api/farm/rooms dan baris HP menyusul satu-satu.
+const rooms = require('./src/adb-rooms');
+const roomCache = { running: false, at: null, rows: [], error: null };
+const roomProbeBusy = new Set();
+async function probeRoomAll() {
+  roomCache.error = null;
+  roomCache.rows = [];
+  const devices = await farm.listDevices().catch(() => []);
+  if (!devices.length) {
+    roomCache.error = 'Belum ada HP terlihat adb. Colok USB lalu aktifkan USB debugging, lalu uji lagi.';
+  }
+  for (const d of devices) {
+    if (orchestra.deviceState(d.id).state === 'working') {
+      roomCache.rows.push({ id: d.id, model: d.model, verdict: 'dilewati', pesan: 'HP sedang menjalankan job create. Tes dilewati supaya room tidak tertukar.' });
+      continue;
+    }
+    if (roomProbeBusy.has(d.id)) {
+      roomCache.rows.push({ id: d.id, model: d.model, verdict: 'dilewati', pesan: 'Deteksi room HP ini sedang berjalan. Tunggu sampai selesai.' });
+      continue;
+    }
+    const row = await rooms.probeDevice(d.id).catch((e) => ({
+      id: d.id, model: d.model, verdict: 'gagal-baca', pesan: String(e.message || e).slice(0, 160), langkah: []
+    }));
+    roomCache.rows.push(row);
+  }
+  roomCache.at = new Date().toISOString();
+  roomCache.running = false;
+}
+app.get('/api/farm/rooms', asyncH(async (req, res) => {
+  res.json({ running: roomCache.running, at: roomCache.at, error: roomCache.error, rows: roomCache.rows });
+}));
+app.post('/api/farm/rooms/probe', asyncH(async (req, res) => {
+  if (!roomCache.running) {
+    roomCache.running = true;
+    roomCache.at = null;
+    void probeRoomAll().catch((e) => { roomCache.running = false; roomCache.error = String(e.message || e).slice(0, 160); });
+  }
+  res.json({ started: true });
+}));
+// Probe room untuk satu HP dari kartu IG Via HP. Probe membuat user Android
+// sementara, mirror IG, lalu menghapusnya. Jangan jalan bersamaan dengan job.
+app.post('/api/create/ig/room-probe', asyncH(async (req, res) => {
+  const deviceId = String((req.body || {}).deviceId || '').trim();
+  if (!deviceId) return res.status(400).json({ error: 'deviceId wajib' });
+  const devs = await farm.listDevices().catch(() => []);
+  if (!devs.some((d) => d.id === deviceId)) return res.status(400).json({ error: 'HP tidak terbaca ADB' });
+  if (roomCache.running) return res.status(409).json({ error: 'Probe room Phone Farm sedang berjalan. Tunggu sampai selesai.' });
+  if (roomProbeBusy.has(deviceId)) return res.status(409).json({ error: 'Deteksi room HP ini sedang berjalan.' });
+  const st = orchestra.deviceState(deviceId);
+  if (st.state !== 'idle') {
+    return res.status(409).json({ error: st.state === 'working' ? 'HP sedang menjalankan job. Tunggu selesai sebelum deteksi room.' : 'HP sedang cooldown. Deteksi room bisa dicoba setelah cooldown.' });
+  }
+  roomProbeBusy.add(deviceId);
+  try {
+    const row = await rooms.probeDevice(deviceId);
+    const at = new Date().toISOString();
+    row.at = row.at || at;
+    const idx = roomCache.rows.findIndex((r) => r.id === deviceId);
+    if (idx >= 0) roomCache.rows[idx] = row;
+    else roomCache.rows.push(row);
+    roomCache.at = at;
+    roomCache.error = null;
+    res.json({ ok: true, room: row });
+  } catch (e) {
+    res.status(500).json({ error: String(e.message || e).slice(0, 180) });
+  } finally {
+    roomProbeBusy.delete(deviceId);
+  }
 }));
 
 // Status watchdog: episode gagal Phone Farm yang jadi bahan alarm notifikasi.
@@ -170,7 +269,10 @@ async function refreshFarmDetails(deviceIds) {
   finally { farmDetailBusy = false; }
 }
 app.get('/api/farm/overview', asyncH(async (req, res) => {
-  const devices = await farm.listDevices().catch(() => []);
+  // Alasan ADB gagal diteruskan ke UI: tanpa ini panel cuma bilang "belum ada HP",
+  // padahal masalahnya di adb yang rusak, bukan HP yang belum dicolok.
+  let adbError = null;
+  const devices = await farm.listDevices().catch((e) => { adbError = String(e.message || e).slice(0, 160); return []; });
   const detailed = await Promise.all(devices.map((d) => farm.deviceInfo(d.id).catch(() => d)));
   const jobs = orchestra.listJobs('', 200);
   const rows = detailed.map((d) => {
@@ -183,7 +285,7 @@ app.get('/api/farm/overview', asyncH(async (req, res) => {
   });
   // Refresh detail SIM/IP di latar (IP dari HP butuh 3-15 dtk — tak boleh blok respons).
   void refreshFarmDetails(devices.map((d) => d.id));
-  res.json({ devices: rows, jobs: jobs.slice(0, 25) });
+  res.json({ devices: rows, jobs: jobs.slice(0, 25), adbError });
 }));
 
 let farmShotBusy = false;
@@ -316,7 +418,8 @@ app.get('/api/accounts/:id', asyncH(async (req, res) => {
 // Daftar jadwal (gabung dengan akun & konten)
 app.get('/api/schedules', asyncH(async (req, res) => {
   const rows = await db.rawAll(`
-    SELECT s.id, s.scheduled_at, s.status, s.posted_at, s.repeat, a.name AS account, c.text AS content
+    SELECT s.id, s.scheduled_at, s.status, s.posted_at, s.repeat, s.account_id,
+      a.name AS account, a.platform, c.text AS content
     FROM schedules s JOIN accounts a ON a.id=s.account_id JOIN contents c ON c.id=s.content_id
     ORDER BY s.scheduled_at DESC
   `);
@@ -427,6 +530,33 @@ app.get('/api/gmail/stats', asyncH(async (req, res) => {
   res.json({ ...stats, hasBinary: gmailRunner.hasExe(), hasPython: gmailRunner.hasInfinity(), job: { status: run.status, imported: run.imported || 0 } });
 }));
 
+// Kode TOTP 6 digit on-demand: panel menghitung sendiri dari secret terenkripsi,
+// jadi tidak perlu buka Google Authenticator satu per satu saat login meminta 2FA.
+app.get('/api/gmail/totp/:id', strictLimiter, asyncH(async (req, res) => {
+  const r = await db.gmailTotpCode(Number(req.params.id));
+  if (r.error === 'tidak_ditemukan') return res.status(404).json({ error: r.error });
+  if (r.error) return res.status(409).json({ error: r.error });
+  res.json(r);
+}));
+
+// 2FA akun panel (paritas /api/gmail/totp): paste kunci saat operator sudah
+// punya teksnya (mis. dari layar setup atau catatan), panel simpan terenkripsi.
+// Kode live dihitung lewat GET kode — kunci tidak pernah dikirim balik.
+app.post('/api/accounts/:id/totp', strictLimiter, asyncH(async (req, res) => {
+  const b = req.body || {};
+  const r = await db.setAccountTotp(Number(req.params.id), typeof b.totpSecret === 'string' ? b.totpSecret : (b.totpSecret === null ? null : ''));
+  if (r.error === 'tidak_ditemukan') return res.status(404).json({ error: r.error });
+  if (r.error) return res.status(409).json({ error: r.error });
+  res.json(r);
+}));
+
+app.get('/api/accounts/:id/totp', strictLimiter, asyncH(async (req, res) => {
+  const r = await db.accountTotpCode(Number(req.params.id));
+  if (r.error === 'tidak_ditemukan') return res.status(404).json({ error: r.error });
+  if (r.error) return res.status(409).json({ error: r.error });
+  res.json(r);
+}));
+
 // Tarik satu Gmail untuk create: tandai terpakai lalu kirim kredensialnya.
 app.post('/api/gmail/claim', asyncH(async (req, res) => {
   const b = req.body || {};
@@ -437,12 +567,18 @@ app.post('/api/gmail/claim', asyncH(async (req, res) => {
   res.json(got);
 }));
 
-// Impor massal dari teks: JSON hasil Gmail Creator Pro atau baris email|sandi.
+// Impor massal dari teks: JSON hasil Gmail Creator Pro atau baris email|sandi[|secret].
+// source 'belian' menandai akun belian agar terpisah dari 'manual'/'hp-native'.
 app.post('/api/gmail/import', strictLimiter, asyncH(async (req, res) => {
-  const text = String((req.body || {}).text || '');
+  const b = req.body || {};
+  const text = String(b.text || '');
   if (!text.trim()) return res.status(400).json({ error: 'teks kosong' });
-  const r = await db.importGmailText(text);
-  broadcastNotification('success', `${r.added} Gmail diimpor ke stok (${r.skipped} dilewati)`);
+  const source = b.source === 'belian' ? 'belian' : 'manual';
+  const r = await db.importGmailText(text, source);
+  // Sertakan alasan per baris (maks 3) agar "dilewati" tidak jadi teka-teki.
+  const det = (r.details || []).slice(0, 3).map((d) => `${d.email}: ${d.reason}`).join(', ');
+  const more = (r.details || []).length > 3 ? ` (+${r.details.length - 3} lainnya)` : '';
+  broadcastNotification('success', `${r.added} Gmail diimpor ke stok (${r.skipped} dilewati)${det ? ` ${det}${more}` : ''}`);
   res.json(r);
 }));
 
@@ -450,6 +586,58 @@ app.delete('/api/gmail/:id', asyncH(async (req, res) => {
   const ok = await db.deleteGmail(Number(req.params.id));
   if (!ok) return res.status(404).json({ error: 'tidak ditemukan' });
   res.json({ ok: true });
+}));
+
+// ---- Login Gmail (tahap 1): email:password → Google, status per akun ----
+// Mode 'headed' (default) atau 'headless' untuk batch. Job satu per akun.
+const gmailLogin = require('./src/gmail-login');
+const gmailOpen = require('./src/gmail-open-run');
+app.post('/api/gmail/:id/login', strictLimiter, asyncH(async (req, res) => {
+  const mode = ['headed', 'headless'].includes((req.body || {}).mode) ? req.body.mode : 'headed';
+  // start() ASYNC (query DB + decrypt): tanpa await res.json(Promise) = {} dan
+  // error path (409/404) tak pernah terkirim — klik Login dari UI terasa mati.
+  const r = await gmailLogin.start(db, Number(req.params.id), mode, (req.body || {}).proxy || null,
+    { noProxy: !!(req.body || {}).noProxy, manualCaptcha: !!(req.body || {}).manualCaptcha });
+  if (r.error === 'already_running') return res.status(409).json(r);
+  if (r.error) return res.status(404).json(r);
+  broadcastNotification('info', `Login Gmail #${req.params.id} dimulai (${mode})`);
+  res.json(r);
+}));
+app.get('/api/gmail/:id/login/status', asyncH(async (req, res) => {
+  const st = gmailLogin.status(Number(req.params.id));
+  // Auto-retry info: job bisa idle (child exit) tapi rencana login ulang otomatis
+  // masih hidup — operator perlu tahu "menunggu retry, jangan tutup server".
+  st.retry = gmailLogin.retryInfo(Number(req.params.id));
+  res.json(st);
+}));
+// Riwayat percobaan login per akun (dipakai modal riwayat di halaman Stok Gmail).
+app.get('/api/gmail/:id/login/log', asyncH(async (req, res) => {
+  res.json(await db.listGmailLoginLog(Number(req.params.id), 10));
+}));
+app.post('/api/gmail/:id/login/stop', asyncH(async (req, res) => {
+  const r = gmailLogin.stop(Number(req.params.id));
+  if (r.error) return res.status(409).json(r);
+  res.json(r);
+}));
+
+// Buka Gmail pakai sesi tersimpan (tanpa login ulang). Kolom login_status 'ok'
+// di UI ganti tombol Login jadi Buka. Guard dobel spawn: status 'open' → 409.
+app.post('/api/gmail/:id/open', strictLimiter, asyncH(async (req, res) => {
+  const rows = await db.rawAll('SELECT id, email FROM gmail_pool WHERE id = ?', [Number(req.params.id)]);
+  const row = rows && rows[0];
+  if (!row) return res.status(404).json({ error: 'tidak_ditemukan' });
+  const r = gmailOpen.start(row.id, row.email, { noProxy: !!(req.body || {}).noProxy }, (req.body || {}).proxy || null);
+  if (r.error === 'already_open') return res.status(409).json(r);
+  if (r.error) return res.status(400).json(r);
+  res.json(r);
+}));
+app.get('/api/gmail/:id/open/status', asyncH(async (req, res) => {
+  res.json(gmailOpen.status(Number(req.params.id)));
+}));
+app.post('/api/gmail/:id/open/stop', asyncH(async (req, res) => {
+  const r = gmailOpen.stop(Number(req.params.id));
+  if (r.error) return res.status(409).json(r);
+  res.json(r);
 }));
 
 // Jalankan / hentikan Gmail Creator Pro (mode 1 akun) + status log live.
@@ -478,6 +666,248 @@ app.post('/api/gmail/run/input', asyncH(async (req, res) => {
   const r = gmailRunner.input(req.body.text);
   if (r.error) return res.status(409).json({ error: r.error });
   res.json(r);
+}));
+
+// Arsip kelahiran Gmail native (creator HP via ADB): JSONL di logs/gmail-native-births.log.
+// Baris rusak dilaporkan lewat `broken`, bukan menggagalkan endpoint; arsip belum ada = kosong.
+app.get('/api/gmail-native/births', asyncH(async (req, res) => {
+  const limit = Math.min(Math.max(Number(req.query.limit) || 200, 1), 500);
+  const rows = [];
+  let broken = 0;
+  try {
+    const text = await fsp.readFile(path.join(__dirname, 'logs', 'gmail-native-births.log'), 'utf8');
+    for (const line of text.split('\n')) {
+      const t = line.trim();
+      if (!t) continue;
+      try { rows.push(JSON.parse(t)); } catch { broken += 1; }
+    }
+  } catch (e) {
+    if (e.code !== 'ENOENT') throw e;
+  }
+  rows.reverse(); // terbaru dulu untuk tabel
+  res.json({ total: rows.length + broken, broken, rows: rows.slice(0, limit) });
+}));
+
+// ---- Gmail native: kontrol run creator HP dari panel ----
+// Run dijalankan detached (proses lepas dari server), jadi restart panel tidak
+// mematikan creator yang sedang jalan. PID dicatat di
+// sessions/gmail-native-<label>/run.json sebagai kunci tunggal: mencegah
+// dobel-run sekaligus menjadi dasar tombol Hentikan.
+const nativeRunFile = (label) => path.join(__dirname, 'sessions', `gmail-native-${label}`, 'run.json');
+const nativeBirthsFile = () => path.join(__dirname, 'logs', 'gmail-native-births.log');
+const nativeLabel = (v) => (String(v || 'hp1').replace(/[^a-zA-Z0-9_-]/g, '') || 'hp1');
+
+// Baca run.json dan uji pid masih hidup. Kunci basi (pid sudah mati tanpa
+// sempat membersihkan dirinya) dihapus supaya run berikutnya tidak terblokir.
+async function readNativeRun(label) {
+  let run;
+  try { run = JSON.parse(await fsp.readFile(nativeRunFile(label), 'utf8')); }
+  catch { return null; }
+  try { process.kill(run.pid, 0); } catch {
+    await fsp.unlink(nativeRunFile(label)).catch(() => {});
+    return null;
+  }
+  return run;
+}
+
+// Baris kelahiran terakhir yang valid, untuk "run terakhir" di status.
+async function lastNativeBirth() {
+  let text = '';
+  try { text = await fsp.readFile(nativeBirthsFile(), 'utf8'); } catch { return null; }
+  const lines = text.split('\n').filter((l) => l.trim());
+  for (let i = lines.length - 1; i >= 0; i--) {
+    try { return JSON.parse(lines[i]); } catch { /* baris rusak, lewati */ }
+  }
+  return null;
+}
+
+// Jalankan creator HP: spawn detached dengan output ke file log khusus run ini.
+app.post('/api/gmail-native/run', strictLimiter, asyncH(async (req, res) => {
+  const label = nativeLabel(req.body && req.body.label);
+  const gender = (req.body && req.body.gender) === 'female' ? 'female' : 'male';
+  const network = (req.body && req.body.network) || 'wifi';
+  if (!['wifi', 'sim', 'skip_toggle'].includes(network)) {
+    return res.status(400).json({ error: 'network harus wifi, sim, atau skip_toggle' });
+  }
+  if (await readNativeRun(label)) return res.status(409).json({ error: 'already_running' });
+  const devs = await farm.listDevices().catch(() => []);
+  if (!devs.length) return res.status(400).json({ error: 'no_device' });
+  const serial = (req.body && devs.some((d) => d.id === req.body.serial)) ? req.body.serial : devs[0].id;
+
+  const dir = path.join(__dirname, 'sessions', `gmail-native-${label}`);
+  await fsp.mkdir(dir, { recursive: true });
+  const startedAt = new Date().toISOString();
+  const stamp = startedAt.replace(/[-:]/g, '').replace(/\..+$/, '').replace('T', '-');
+  const logName = `gmail-native-run-${stamp}.log`;
+  const logPath = path.join(__dirname, 'logs', logName);
+  const args = [path.join('src', 'gmail-native-creator.js'), '--label', label, '--serial', serial, '--gender', gender];
+  if (network === 'wifi') args.push('--wifi');
+  if (network === 'skip_toggle') args.push('--sim-skip');
+
+  const fh = await fsp.open(logPath, 'a');
+  let child;
+  try {
+    child = spawn(process.execPath, args, {
+      cwd: __dirname, detached: true, windowsHide: true, stdio: ['ignore', fh.fd, fh.fd],
+    });
+    child.unref();
+  } finally {
+    await fh.close().catch(() => {});
+  }
+
+  const run = { pid: child.pid, startedAt, label, serial, gender, network, logFile: logName };
+  await fsp.writeFile(nativeRunFile(label), JSON.stringify(run, null, 2));
+  res.json({ ok: true, run });
+}));
+
+// Status gabungan untuk strip status + tombol di halaman Buat Gmail / Kelahiran.
+app.get('/api/gmail-native/run-state', asyncH(async (req, res) => {
+  const label = nativeLabel(req.query.label);
+  const [run, devs, last] = await Promise.all([
+    readNativeRun(label),
+    farm.listDevices().catch(() => []),
+    lastNativeBirth(),
+  ]);
+  // deviceInfo menjalankan beberapa shell adb (model, android, baterai), jadi
+  // hanya dijalankan untuk device pertama yang dipakai strip status.
+  const det = devs.length ? await farm.deviceInfo(devs[0].id).catch(() => null) : null;
+  const devices = devs.map((d, i) => (i === 0 && det
+    ? { id: d.id, model: det.model || d.model, android: det.android, battery: det.battery }
+    : { id: d.id, model: d.model, battery: '' }));
+  res.json({
+    running: !!run,
+    run: run || null,
+    hpOnline: devs.length > 0,
+    devices,
+    lastBirth: last,
+  });
+}));
+
+// Hentikan run berjalan: bunuh pohon proses, lalu jaga kejujuran arsip. Bila
+// creator tidak sempat menulis verdict, catat sendiri sebagai process_killed.
+app.post('/api/gmail-native/stop', strictLimiter, asyncH(async (req, res) => {
+  const label = nativeLabel(req.body && req.body.label);
+  const run = await readNativeRun(label);
+  if (!run) return res.status(409).json({ error: 'no_running_job' });
+  await new Promise((resolve) => {
+    exec(`taskkill /PID ${run.pid} /T /F`, { windowsHide: true }, () => resolve());
+  });
+  // Beri creator waktu menulis verdict terakhirnya.
+  await new Promise((r) => setTimeout(r, 2500));
+  const last = await lastNativeBirth();
+  if (!last || new Date(last.ts) < new Date(run.startedAt)) {
+    const rec = { label: run.label, serial: run.serial, network: run.network, ts: new Date().toISOString(), verdict: 'process_killed', note: 'Dihentikan dari panel' };
+    await fsp.appendFile(nativeBirthsFile(), JSON.stringify(rec) + '\n');
+  }
+  await fsp.unlink(nativeRunFile(label)).catch(() => {});
+  res.json({ ok: true });
+}));
+
+// Tail log run: file run aktif, atau file mana pun gmail-native-run-*.log.
+app.get('/api/gmail-native/run-log', asyncH(async (req, res) => {
+  const label = nativeLabel(req.query.label);
+  const run = await readNativeRun(label);
+  const name = req.query.file ? path.basename(String(req.query.file)) : (run ? run.logFile : null);
+  if (!name || !/^gmail-native-run-.*\.log$/.test(name)) return res.status(404).json({ error: 'no_log' });
+  let text = '';
+  try { text = await fsp.readFile(path.join(__dirname, 'logs', name), 'utf8'); }
+  catch (e) { if (e.code === 'ENOENT') return res.json({ file: name, running: !!run, log: '' }); throw e; }
+  const lines = text.split('\n');
+  res.json({ file: name, running: !!run, log: lines.slice(-120).join('\n') });
+}));
+
+// Masukkan hasil kelahiran sukses ke stok Gmail (gmail_pool) agar bisa
+// di-claim AutoCreate. Hanya baris verdict 'sukses' yang diterima.
+app.post('/api/gmail-native/stock', strictLimiter, asyncH(async (req, res) => {
+  const ts = String((req.body && req.body.ts) || '');
+  if (!ts) return res.status(400).json({ error: 'field ts wajib' });
+  let text = '';
+  try { text = await fsp.readFile(nativeBirthsFile(), 'utf8'); }
+  catch { return res.status(404).json({ error: 'Arsip kelahiran tidak ditemukan' }); }
+  let row = null;
+  for (const line of text.split('\n')) {
+    if (!line.trim()) continue;
+    try {
+      const r = JSON.parse(line);
+      if (r.ts === ts && r.verdict === 'sukses' && r.username && r.password) row = r;
+    } catch { /* baris rusak, lewati */ }
+  }
+  if (!row) return res.status(404).json({ error: 'Baris kelahiran tidak ditemukan atau belum sukses' });
+  const email = String(row.username).includes('@') ? row.username : `${row.username}@gmail.com`;
+  const stock = await db.listGmail(1000);
+  if (stock.some((g) => g.email === email)) return res.status(409).json({ error: 'already_in_stock', email });
+  await db.addGmail({ email, password: row.password, source: 'hp-native' });
+  res.json({ ok: true, email });
+}));
+
+// Hapus baris arsip kelahiran per run atau massal, dicocokkan lewat ts.
+// Baris rusak dipertahankan: penghapusan hanya menyentuh baris yang cocok.
+app.post('/api/gmail-native/births/delete', strictLimiter, asyncH(async (req, res) => {
+  const list = Array.isArray(req.body && req.body.tsList) ? req.body.tsList.map(String) : [];
+  if (!list.length) return res.status(400).json({ error: 'field tsList wajib (array ts)' });
+  if (list.length > 500) return res.status(400).json({ error: 'Maksimal 500 baris per permintaan' });
+  const wanted = new Set(list);
+  let text = '';
+  try { text = await fsp.readFile(nativeBirthsFile(), 'utf8'); }
+  catch { return res.status(404).json({ error: 'Arsip kelahiran tidak ditemukan' }); }
+  const kept = [];
+  const removed = [];
+  for (const line of text.split('\n')) {
+    const t = line.trim();
+    if (!t) continue;
+    let hit = false;
+    try { hit = wanted.has(JSON.parse(t).ts); } catch { /* baris rusak: pertahankan */ }
+    if (hit) removed.push(t); else kept.push(t);
+  }
+  if (removed.length) {
+    // Cadangan otomatis: salinan baris yang dihapus, sumber tombol Batalkan.
+    await fsp.appendFile(path.join(__dirname, 'logs', 'gmail-native-births-trash.log'), removed.join('\n') + '\n');
+    await fsp.writeFile(nativeBirthsFile(), kept.join('\n') + (kept.length ? '\n' : ''));
+  }
+  res.json({ ok: true, deleted: removed.length, lines: removed });
+}));
+
+// Gambar screenshot hasil run (field shot di arsip = path file di folder sesi).
+// Nama file dibersihkan ke basename dan dicek polanya; <img> tak bisa kirim
+// header API key, jadi halaman mengambilnya sebagai blob via fetch.
+app.get('/api/gmail-native/shot', asyncH(async (req, res) => {
+  const label = nativeLabel(req.query.label);
+  const name = req.query.file ? path.basename(String(req.query.file)) : '';
+  if (!name || !/^[\w.-]+\.png$/.test(name)) return res.status(404).json({ error: 'no_shot' });
+  let buf;
+  try { buf = await fsp.readFile(path.join(__dirname, 'sessions', `gmail-native-${label}`, name)); }
+  catch { return res.status(404).json({ error: 'Screenshot tidak ditemukan' }); }
+  res.type('png').send(buf);
+}));
+
+// Kembalikan baris arsip dari tombol Batalkan (atau salin manual dari trash log).
+// Baris yang ts-nya sudah ada di arsip dilewati, jadi tak pernah dobel.
+app.post('/api/gmail-native/births/restore', strictLimiter, asyncH(async (req, res) => {
+  // Item boleh string JSON (dari tombol Batalkan) atau objek langsung; disamakan
+  // dulu supaya validasi tunggal.
+  const lines = Array.isArray(req.body && req.body.lines)
+    ? req.body.lines.map((l) => (typeof l === 'string' ? l : JSON.stringify(l)))
+    : [];
+  if (!lines.length) return res.status(400).json({ error: 'field lines wajib (array baris JSON)' });
+  if (lines.length > 500) return res.status(400).json({ error: 'Maksimal 500 baris per permintaan' });
+  const parsed = [];
+  for (const l of lines) {
+    try {
+      const o = JSON.parse(l);
+      if (!o || !o.ts) return res.status(400).json({ error: 'Baris cadangan tidak valid (tanpa ts)' });
+      parsed.push(JSON.stringify(o));
+    } catch { return res.status(400).json({ error: 'Baris cadangan bukan JSON valid' }); }
+  }
+  let existing = '';
+  try { existing = await fsp.readFile(nativeBirthsFile(), 'utf8'); } catch { /* arsip belum ada */ }
+  const have = new Set();
+  for (const line of existing.split('\n')) {
+    if (!line.trim()) continue;
+    try { have.add(JSON.parse(line).ts); } catch { /* baris rusak */ }
+  }
+  const fresh = parsed.filter((l) => { try { return !have.has(JSON.parse(l).ts); } catch { return false; } });
+  if (fresh.length) await fsp.appendFile(nativeBirthsFile(), fresh.join('\n') + '\n');
+  res.json({ ok: true, restored: fresh.length, skipped: parsed.length - fresh.length });
 }));
 
 // Hapus akun beserta data & profil browsernya.
@@ -599,18 +1029,71 @@ const CP = (p) => ['ig', 'fb', 'tiktok'].includes(p) ? p : 'ig'; // platform val
 
 app.post('/api/create/:platform/run', asyncH(async (req, res) => {
   const p = CP(req.params.platform);
-  const { proxy } = (req.body || {});
-  const r = await createRunner.startCreate(p, proxy ? String(proxy) : '');
+  const { proxy, gmailId, phone, manualEmail } = (req.body || {});
+  // phone=true: daftar via nomor HP — IG & FB; runner lalu jalan marker [PHONE_REQUIRED]/kartu panel.
+  // manualEmail (IG, FB, TikTok): email ketik-an operator — bukan Gmail stok, bukan temp-mail; OTP via kartu panel.
+  const r = await createRunner.startCreate(p, proxy ? String(proxy) : '', {
+    gmailId,
+    phone: phone === true && (p === 'ig' || p === 'fb'),
+    manualEmail: ((p === 'ig' || p === 'fb' || p === 'tiktok') && typeof manualEmail === 'string' && manualEmail.trim()) ? manualEmail.trim() : null,
+    // IG: tanpa proxy pilihan, runner mengalokasikan IP bersih yang dipatok
+    // khusus untuk akun ini (1 akun = 1 IP tetap, bukan pinjaman bergiliran).
+    autoIp: p === 'ig' && !proxy && req.body.autoIp === true,
+  });
   if (r.error) return res.status(409).json(r);
   res.json(r);
 }));
 app.get('/api/create/:platform/status', asyncH(async (req, res) => {
-  const p = CP(req.params.platform);
+  // Slot bulk paralel ('ig:bulk2') diterima — status per-run utk kartu OTP per-run.
+  const raw = String(req.params.platform || '');
+  const p = /^ig:bulk\d+$/.test(raw) ? raw : CP(raw);
   res.json(createRunner.createStatus(p));
 }));
 app.post('/api/create/:platform/stop', asyncH(async (req, res) => {
   const p = CP(req.params.platform);
   res.json(createRunner.stopCreate(p));
+}));
+// Input mid-job (FB): operator kirim kode OTP dari panel → diteruskan ke stdin worker.
+// Slot bulk paralel ('ig:bulk2') juga diterima di sini — OTP per-run menuju stdin run itu.
+app.post('/api/create/:platform/input', asyncH(async (req, res) => {
+  const raw = String(req.params.platform || '');
+  const p = /^ig:bulk\d+$/.test(raw) ? raw : CP(raw);
+  const { text } = (req.body || {});
+  if (typeof text !== 'string' || !text.trim()) return res.status(400).json({ error: 'text wajib' });
+  res.json(createRunner.inputCreate(p, text.trim()));
+}));
+
+// BULK IG: sekali jalan 1-5 akun berurutan (1 browser per akun, jeda 3-5 mnt).
+// Jalur temp-mail otomatis saja — Gmail stok/nomor HP butuh operator per akun.
+app.post('/api/create/ig/bulk', strictLimiter, asyncH(async (req, res) => {
+  const { count, proxies, proxy, gmailIds, browsers } = (req.body || {});
+  const r = await createRunner.startBulkIg(Number(count) || 2, { proxies, proxy, gmailIds, browsers });
+  if (r.error) return res.status(409).json(r);
+  res.json(r);
+}));
+app.get('/api/create/ig/bulk/status', asyncH(async (req, res) => {
+  res.json(createRunner.bulkStatus());
+}));
+app.post('/api/create/ig/bulk/stop', asyncH(async (req, res) => {
+  res.json(createRunner.stopBulkIg());
+}));
+
+// Cek kualitas IP koneksi SEBELUM Mulai: tunnel CONNECT ke ipwho.is via
+// proxy persis yang akan dipakai creator (parse + auth sama dgn runner),
+// balas operator/ASN/city supaya operator tahu IP keluar milik operator apa —
+// guard manual sebelum menyia-siakan email/identitas pada IP Telkomsel burn.
+const { lookupExitIp } = require('./src/net-probe');
+app.get('/api/create/:platform/ip-geo', asyncH(async (req, res) => {
+  const p = CP(req.params.platform);
+  const proxy = typeof req.query.proxy === 'string' ? req.query.proxy : '';
+  res.json(await lookupExitIp(proxy));
+}));
+
+// Tes alokasi IP bersih: tampilkan IP yang akan didapat tanpa menyimpan proxy,
+// tanpa mengikat akun, dan tanpa membuka browser.
+app.post('/api/create/ig/ip-allocate-test', strictLimiter, asyncH(async (req, res) => {
+  const r = await createRunner.previewIgIp();
+  res.status(r.error ? 409 : 200).json(r);
 }));
 
 // Hasil akun terakhir (username/email/password/proxy/IP lahir) dari file result creator.
@@ -619,13 +1102,23 @@ app.get('/api/create/:platform/result', asyncH(async (req, res) => {
   res.json({ result: createRunner.getCreateResult(p) });
 }));
 
+// Dump struktur wizard terakhir — kartu diagnosis di UI saat run create gagal.
+app.get('/api/create/fb/wizard-dump', asyncH(async (req, res) => {
+  res.json({ dump: createRunner.getLatestWizardDump() });
+}));
+
 // Daftarkan akun hasil create ke panel TANPA CLI (pakai jalur sama dengan form Akun).
 app.post('/api/create/:platform/register', asyncH(async (req, res) => {
   const p = CP(req.params.platform);
   const r = createRunner.getCreateResult(p);
   if (!r) return res.status(404).json({ error: 'Belum ada hasil create untuk didaftarkan' });
   const existing = await db.getAccountByName(r.username).catch(() => null);
-  if (existing) {
+  // Tambah: akun platform LAIN dengan email sama (mis. registrasi lama 'ig')
+  // dianggap berbeda — jalur create FB/IG/TikTok punya tabel platform masing-masing,
+  // jadi baris 'ig' lama tidak boleh menelan hasil create 'fb' (pelajaran akun
+  // #71 pocotre76 yang tadinya salah masuk daftar Akun Instagram).
+  const existingSamePlatform = (existing && existing.platform === p) ? existing : null;
+  if (existingSamePlatform) {
     createRunner.markRegistered(p, existing.id);
     return res.json({ ok: true, id: existing.id, already: true, name: existing.name });
   }
@@ -633,6 +1126,31 @@ app.post('/api/create/:platform/register', asyncH(async (req, res) => {
     name: r.username, email: r.email, password: r.password,
     proxy: r.proxy || undefined, platform: p,
   });
+  // IP lahir hasil alokasi otomatis diikat permanen ke akun ini.
+  if (r.proxy) await db.bindAutoProxy(r.proxy, r.username).catch(() => {});
+  // Kunci 2FA hasil capture worker (sessions/ig-<user>.totp) — langsung masuk DB
+  // terenkripsi saat akun didaftarkan, jadi akun lahir sudah siap login-otomatis.
+  try {
+    const fsTotp = require('fs');
+    const totpFile = path.join(__dirname, 'sessions', `${p}-${r.username}.totp`);
+    if (p === 'ig' && fsTotp.existsSync(totpFile)) {
+      const secretRaw = fsTotp.readFileSync(totpFile, 'utf8').trim();
+      const st = await db.setAccountTotp(id, secretRaw);
+      fsTotp.unlinkSync(totpFile); // kunci sudah di DB — file mentah jangan tertinggal
+      console.log('[2FA] kunci capture tersimpan utk akun #' + id + ' (' + (st.error || 'OK') + ')');
+    }
+  } catch (e) { console.log('[2FA] simpan kunci capture gagal (non-fatal): ' + e.message); }
+  // Spoof canvas/audio/webgl — seed ulang dari username+email yang sama, jadi nilai
+  // identik dengan yang dipakai browser signup (deterministik). Creator TikTok
+  // menyertakan konfig yang BENAR-BENAR dipakai saat daftar (seed email, id belum
+  // ada); pakai itu agar canvas hash tidak berubah di login pertama.
+  try {
+    const fullSpoof = (r.fingerprintJson && typeof r.fingerprintJson === 'object')
+      ? r.fingerprintJson
+      : require('./src/fingerprint-spoof').spoofConfigFor({ id, name: r.username, email: r.email, user_agent: r.user_agent || '' });
+    db.run('UPDATE accounts SET fingerprint_json = ? WHERE id = ?', [JSON.stringify(fullSpoof), id]);
+    db.save();
+  } catch (e) { /* non-fatal */ }
   createRunner.markRegistered(p, id);
   broadcastNotification('success', `Akun ${r.username} (#${id}) didaftarkan ke panel dari Auto-Create`);
   res.json({ ok: true, id, name: r.username });
@@ -651,6 +1169,373 @@ app.get('/api/create/ig/relogin/status', asyncH(async (req, res) => {
 }));
 app.post('/api/create/ig/relogin/stop', asyncH(async (req, res) => {
   res.json(createRunner.stopRelogin());
+}));
+
+// ---- SIGNUP IG VIA HP (ADB) — mode kedua di halaman IG Auto-Create ----
+
+// Daftar HP + status kelayakan signup: idle / sibuk / cooldown 24 jam. Sumber
+// tunggal: adb devices + orchestra.deviceState (hukum tempo yang sama dengan farm).
+const SIGNUP_DRIVER = path.join(__dirname, 'src', 'farm-driver-ig.js');
+const signupDriverProcs = new Map(); // jobId -> ChildProcess (bila spawn in-process)
+app.get('/api/create/ig/phones', asyncH(async (req, res) => {
+  const devices = await farm.listDevices().catch(() => []);
+  const rows = await Promise.all(devices.map(async (d) => {
+    const info = await farm.deviceInfo(d.id).catch(() => ({}));
+    const st = orchestra.deviceState(d.id);
+    // Detail HP disinkronkan latar (baterai/IPbutuh detik — tidak blok respons)
+    void hygiene.refreshDeviceDetails(d.id).catch(() => {});
+    const cachedRoom = roomCache.rows.find((r) => r.id === d.id);
+    const room = cachedRoom ? {
+      verdict: cachedRoom.verdict || '',
+      pesan: cachedRoom.pesan || '',
+      ig: cachedRoom.ig || '',
+      pindah: cachedRoom.pindah || '',
+      at: cachedRoom.at || roomCache.at || null,
+    } : null;
+    return { id: d.id, model: info.model || d.model, android: info.android, battery: info.battery, state: st.state, stateNote: st.reason || null, jobId: st.jobId || null, room };
+  }));
+  res.json({ phones: rows });
+}));
+
+// Mulai signup IG di HP tertentu: antre job via orchestra (cooldown 24j ditegakkan
+// di sini) lalu jalankan sopir HP detached (log ke logs/farm-driver-<jobId>.log).
+// Payload: { deviceId, gmailId?, manualEmail?, tempEmail?, navOnly? }.
+// tempEmail=true: sopir membuat inbox tmailor dan membaca OTP sendiri.
+// Jalur lain memakai kartu OTP panel: operator isi kode di papan job.
+app.post('/api/create/ig/phone-run', strictLimiter, asyncH(async (req, res) => {
+  const { deviceId, gmailId, navOnly, manualEmail, tempEmail } = req.body || {};
+  if (!deviceId) return res.status(400).json({ error: 'deviceId wajib' });
+  const devs = await farm.listDevices().catch(() => []);
+  if (!devs.some((d) => d.id === deviceId)) return res.status(400).json({ error: 'HP tidak terbaca ADB' });
+  if (roomProbeBusy.has(deviceId)) return res.status(409).json({ error: 'Deteksi room sedang berjalan. Tunggu sampai selesai.' });
+  if (tempEmail && (String(manualEmail || '').trim() || gmailId)) {
+    return res.status(400).json({ error: 'pilih tmailor atau email manual/Gmail, jangan campur' });
+  }
+  if (tempEmail) {
+    const { TmailorClient } = require('./lib/mail-worker/tmailor');
+    if (!new TmailorClient().configured) {
+      return res.status(400).json({ error: 'tmailor belum dikonfigurasi (TMAILOR_API_KEY)' });
+    }
+  }
+  // Identitas: email manual (Outlook dsb.) menang atas pilihan Gmail/temp-mail.
+  // OTP domain luar diisi operator di kartu job (payload.otp) saat sopir
+  // menunggu di langkah 7.
+  let email, password, snoof = null;
+  let gmailRow = null;
+  let emailManual = null;
+  let tempMail = false;
+  if (tempEmail) {
+    // Alamat dibuat sopir saat job create mulai, lalu disimpan ke payload.
+    email = '';
+    tempMail = true;
+  } else if (typeof manualEmail === 'string' && manualEmail.trim()) {
+    const me = manualEmail.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(me)) return res.status(400).json({ error: 'format email manual tidak valid: ' + me });
+    const dupAcct = await db.rawAll('SELECT name FROM accounts WHERE lower(email) = ?', [me]).catch(() => []);
+    if (dupAcct && dupAcct.length) return res.status(409).json({ error: `email ${me} sudah terpakai akun "${dupAcct[0].name}" di panel` });
+    const dupPool = await db.rawAll('SELECT email FROM gmail_pool WHERE lower(email) = ?', [me]).catch(() => []);
+    if (dupPool && dupPool.length) return res.status(409).json({ error: `email ${me} sudah ada di stok Gmail` });
+    emailManual = me;
+    email = me;
+    password = require('./src/id-identity').makeIdentity().password;
+  } else if (gmailId) {
+    const rows = await db.rawAll('SELECT id, email, password_enc, status, used_by FROM gmail_pool WHERE id = ?', [Number(gmailId)]).catch(() => []);
+    if (!rows || !rows.length) return res.status(400).json({ error: 'gmail #' + gmailId + ' tidak ditemukan' });
+    gmailRow = rows[0];
+    const plts = db.gmailUsedPlatforms(gmailRow.used_by);
+    if (gmailRow.status === 'used' && plts.includes('ig')) return res.status(409).json({ error: `gmail #${gmailId} sudah terpakai daftar IG (${gmailRow.used_by}) — pilih Gmail lain` });
+    try { password = require('./src/crypto').decrypt(gmailRow.password_enc); } catch (e) { password = null; }
+    if (!password) return res.status(400).json({ error: 'password gmail #' + gmailId + ' tidak terbaca' });
+    email = gmailRow.email;
+  } else {
+    const idn = require('./src/id-identity').makeIdentity();
+    email = (require('./src/email-alias').makeEmail({ first: idn.first, last: idn.last })).alias + '@' + (process.env.AMMAIL_DOMAIN || 'mialmuhajirin.sch.id');
+    password = idn.password;
+  }
+  // Selalu ada identitas penuh — Gmail stok hanya menyuplai email+password; nama
+  // esensial username/bday tetap dari generator biar tidak dobel generator.
+  const idn = require('./src/id-identity').makeIdentity();
+  if (!password) password = idn.password;
+  const payload = {
+    email, password, username: idn.username, bday: idn.birthdate,
+    mode: navOnly ? 'nav' : 'create', gmailId: tempMail ? null : (gmailId || null), via: 'hp', navOnly: !!navOnly,
+    manualEmail: emailManual, tempMail,
+  };
+  const queued = orchestra.queueJob(deviceId, 'ig', payload);
+  if (queued.error) return res.status(409).json({ error: queued.error });
+  // Sopir: spawn detached (log ke file), pola sama dengan gmail-native/run.
+  const stamp = queued.id;
+  const logPath = path.join(__dirname, 'logs', `farm-driver-${stamp}.log`);
+  await fsp.mkdir(path.dirname(logPath), { recursive: true });
+  const fh = await fsp.open(logPath, 'a');
+  const args = [SIGNUP_DRIVER, queued.id];
+  if (!navOnly) args.push('--go');
+  let child;
+  try {
+    child = spawn(process.execPath, args, { cwd: __dirname, detached: true, windowsHide: true, stdio: ['ignore', fh.fd, fh.fd] });
+    child.unref();
+  } finally {
+    await fh.close().catch(() => {});
+  }
+  res.json({ ok: true, jobId: queued.id, deviceId, mode: navOnly ? 'nav' : 'create', email, username: idn.username, manualEmail: emailManual, tempMail });
+}));
+
+// Daftarkan hasil create IG via HP ke panel. Dipakai tombol di kartu job supaya
+// akun lahir di HP tidak menggantung di riwayat job saja. Idempoten per username.
+app.post('/api/create/ig/phone-register', strictLimiter, asyncH(async (req, res) => {
+  const job = orchestra.getJob(String((req.body || {}).jobId || ''));
+  if (!job || job.platform !== 'ig') return res.status(404).json({ error: 'job tidak ditemukan' });
+  if (job.status !== 'done' || !job.payload || job.payload.mode !== 'create') {
+    return res.status(409).json({ error: 'job belum selesai sebagai create sungguhan' });
+  }
+  const { username, email, password } = job.payload;
+  if (!username || !email || !password) return res.status(400).json({ error: 'payload job tidak lengkap' });
+  const existing = await db.getAccountByName(username).catch(() => null);
+  if (existing && existing.platform === 'ig') return res.json({ ok: true, id: existing.id, already: true, name: existing.name });
+  const id = await db.addAccount({ name: username, email, password, platform: 'ig' });
+  try {
+    const fullSpoof = require('./src/fingerprint-spoof').spoofConfigFor({ id, name: username, email, user_agent: '' });
+    db.run('UPDATE accounts SET fingerprint_json = ? WHERE id = ?', [JSON.stringify(fullSpoof), id]);
+    db.save();
+  } catch (e) { /* fingerprint non-fatal */ }
+  await db.addAccountEvent({
+    accountId: id, platform: 'ig', event: 'created',
+    source: 'phone_create', reason: `lahir lewat HP ${job.deviceId}`,
+  }).catch(() => {});
+  res.json({ ok: true, id, name: username });
+}));
+
+// Kartu OTP untuk job HP: operator isi kode dari Gmail stok (PC) → job.payload.otp.
+// Driver membaca payload.otp di loop langkah 7 — tidak perlu saluran keduua.
+app.post('/api/create/ig/phone-otp', strictLimiter, asyncH(async (req, res) => {
+  const { jobId, code } = req.body || {};
+  if (!jobId || !code) return res.status(400).json({ error: 'jobId & code wajib' });
+  const r = orchestra.appendOtp(String(jobId), String(code));
+  if (r.error) return res.status(404).json(r);
+  res.json({ ok: true });
+}));
+
+// Riwayat job HP (papan kanan): 25 job terkini platform ig.
+app.get('/api/create/ig/phone-jobs', asyncH(async (req, res) => {
+  const jobs = orchestra.listJobs('', 30).filter((j) => j.platform === 'ig').slice(0, 25);
+  res.json({ jobs });
+}));
+
+// ---- SIGNUP FB VIA HP (ADB) — kartu Via HP di FB Auto-Create ----
+// Resep: SOP TERKUNCI docs/sop-create-fb-via-hp.md (uji A 19/10: akun lahir &
+// langsung Feed tanpa checkpoint). Perbedaan dengan IG: FB wizard nomor-HP
+// TIDAK memakai email OTP — verifikasi lewat SMS yang FB sering auto-verifikasi
+// via aplikasi (uji A: layar kode lewat sendiri tanpa SMS masuk inbox).
+// Aturan SOP tetap: nomor SIM oleh OPERATOR ketik manual di HP (bot jangan pegang
+// nomor), nav-only default, --go hanya bila device cooldown lewat.
+const FB_DRIVER = path.join(__dirname, 'src', 'farm-driver-fb.js');
+app.get('/api/create/fb/phones', asyncH(async (req, res) => {
+  const devices = await farm.listDevices().catch(() => []);
+  const rows = await Promise.all(devices.map(async (d) => {
+    const info = await farm.deviceInfo(d.id).catch(() => ({}));
+    const st = orchestra.deviceState(d.id);
+    void hygiene.refreshDeviceDetails(d.id).catch(() => {});
+    // Slot user Android HP (dropdown Via HP): daftar room + status kosong.
+    let users = [];
+    try {
+      users = (await rooms.listRooms(d.id, farm.APPS.facebook)).map((u) => ({
+        id: u.id, name: u.name, running: u.running, current: u.current, installed: u.installed, empty: u.empty,
+      }));
+    } catch (e) { users = [{ id: 0, name: 'Pemilik' }]; }
+    if (!users.length) users = [{ id: 0, name: 'Pemilik' }];
+    return { id: d.id, model: info.model || d.model, android: info.android, battery: info.battery, state: st.state, stateNote: st.reason || null, jobId: st.jobId || null, users };
+  }));
+  res.json({ phones: rows });
+}));
+app.post('/api/create/fb/phone-run', strictLimiter, asyncH(async (req, res) => {
+  const { deviceId, navOnly, deviceUser } = req.body || {};
+  if (!deviceId) return res.status(400).json({ error: 'deviceId wajib' });
+  const devs = await farm.listDevices().catch(() => []);
+  if (!devs.some((d) => d.id === deviceId)) return res.status(400).json({ error: 'HP tidak terbaca ADB' });
+  // Slot user Android HP (0=Pemilik, 10/11=Pengguna baru). Kalau UI tidak mengirim,
+  // pilih otomatis: ambil user non-0 pertama yang FB-nya ter-install dan belum
+  // memegang sesi (sisa layar welcome) — cek lapangan ringan per kandidat.
+  const pilihEksplisit = deviceUser !== undefined && deviceUser !== null && String(deviceUser).trim() !== '';
+  if (pilihEksplisit && (!Number.isInteger(Number(deviceUser)) || Number(deviceUser) < 0)) {
+    return res.status(400).json({ error: 'deviceUser tidak valid' });
+  }
+  let slotUser = pilihEksplisit ? Number(deviceUser) : 0;
+  const deviceUserKosong = !pilihEksplisit;
+  // Janitor slot: buang sisa room tamu IG (tamu-*) sebelum pilih slot — biar
+  // pemilihan "user non-0 pertama" tidak makan ruang tamu basi. Slot kerja FB
+  // bernama "Slot" aman: janitor tidak pernah menyentuhnya.
+  try {
+    const jn = await rooms.janitorSlots(deviceId);
+    if (jn && jn.dibuang.length) console.log(`[fb-phone-run] janitor: hapus slot ${jn.dibuang.join(', ')} (sisa ${jn.users})`);
+  } catch (e) { console.log('[fb-phone-run] janitor gagal (lanjut saja): ' + String(e.message || e).slice(0, 120)); }
+  if (deviceUserKosong && !navOnly) {
+    try {
+      const usersOut = await farm.shell(deviceId, ['shell', 'pm', 'list', 'users']).catch(() => '');
+      const ids = [...String(usersOut).matchAll(/UserInfo\{(\d+):/g)].map((m) => Number(m[1])).filter((x) => x !== 0);
+      slotUser = 0; // fallback bila tak ada kandidat cocok
+      for (const uid of ids) {
+        const st = await farm.shell(deviceId, ['shell', 'dumpsys', 'package', 'com.facebook.katana']).catch(() => '');
+        const blk = new RegExp(`User ${uid}: (.*)`).exec(String(st));
+        if (!blk || !/installed=true/.test(blk[1])) {
+          await farm.shell(deviceId, ['shell', 'pm', 'install-existing', '--user', String(uid), 'com.facebook.katana']).catch(() => {});
+        }
+        // slotUser untuk create = user non-0 pertama yang FB ter-install.
+        slotUser = uid;
+        break; // sederhana: user non-0 pertama; pengecekan sesi bersih tetap oleh driver
+      }
+    } catch (e) { /* fallback slotUser=0 */ }
+  }
+  // Pilihan eksplisit dari UI harus melewati jalur yang sama dengan auto:
+  // pastikan room ada dan FB terpasang. Tanpa ini, room kosong yang dipilih
+  // akan di-queue tetapi driver membuka aplikasi yang belum ada.
+  if (slotUser > 0) {
+    const userRows = await rooms.listUsers(deviceId).catch(() => []);
+    if (!userRows.some((u) => u.uid === slotUser)) {
+      return res.status(400).json({ error: `room ${slotUser} tidak ada di HP` });
+    }
+    try {
+      await rooms.installForUser(deviceId, slotUser, farm.APPS.facebook);
+    } catch (e) {
+      return res.status(409).json({ error: `Gagal menyiapkan Facebook di room ${slotUser}: ${String(e.message || e).slice(0, 140)}` });
+    }
+  }
+  // Identitas nama/DOB acak dari generator (SOP: usia 20-70). Password kuat.
+  // Gender fix Laki-laki (konvensi kelahiran akun sukses).
+  const idn = require('./src/id-identity').pickName();
+  const sTahun = 1970 + Math.floor(Math.random() * 37); // 1970-2006 (usia 20+)
+  const bday = { day: 1 + Math.floor(Math.random() * 28), month: 1 + Math.floor(Math.random() * 12), year: sTahun };
+  const password = 'Fb' + Math.random().toString(36).slice(2, 10) + '!7';
+  const payload = {
+    firstname: idn.first, lastname: idn.last, bday, password,
+    mode: navOnly ? 'nav' : 'create', via: 'hp', navOnly: !!navOnly,
+    deviceUser: slotUser, // slot user Android tempat FB wizard dijalankan
+  };
+  const queued = orchestra.queueJob(deviceId, 'fb', payload);
+  if (queued.error) return res.status(409).json({ error: queued.error });
+  // Sopir FB: spawn detached (log ke file), pola sama dengan IG phone-run.
+  const logPath = path.join(__dirname, 'logs', `farm-driver-fb-${queued.id}.log`);
+  await fsp.mkdir(path.dirname(logPath), { recursive: true });
+  const fh = await fsp.open(logPath, 'a');
+  const args = [FB_DRIVER, queued.id];
+  if (!navOnly) args.push('--go');
+  let child;
+  try {
+    child = spawn(process.execPath, args, { cwd: __dirname, detached: true, windowsHide: true, stdio: ['ignore', fh.fd, fh.fd] });
+    child.unref();
+  } finally {
+    await fh.close().catch(() => {});
+  }
+  res.json({ ok: true, jobId: queued.id, deviceId, mode: navOnly ? 'nav' : 'create', name: idn.first + ' ' + idn.last, deviceUser: slotUser });
+}));
+// Riwayat job HP FB (papan kanan): 25 job terkini platform fb.
+app.get('/api/create/fb/phone-jobs', asyncH(async (req, res) => {
+  const jobs = orchestra.listJobs('', 30).filter((j) => j.platform === 'fb').slice(0, 25);
+  res.json({ jobs });
+}));
+
+// ---- SIGNUP TIKTOK VIA HP (ADB): jalur email → layar kode ----
+// TikTok di HP hanya menerima email/nomor telepon. Dua sumber email:
+//   tempEmail=true -> sopir membuat inbox tmailor dan membaca kodenya sendiri;
+//   manualEmail    -> alamat operator, kodenya ditempel di kartu job.
+// Domain temp-mail AMMail sengaja tidak dipakai lagi karena sudah ditolak TikTok.
+const TIKTOK_DRIVER = path.join(__dirname, 'src', 'farm-driver-tiktok.js');
+app.get('/api/create/tiktok/phones', asyncH(async (req, res) => {
+  const devices = await farm.listDevices().catch(() => []);
+  const rows = await Promise.all(devices.map(async (d) => {
+    const info = await farm.deviceInfo(d.id).catch(() => ({}));
+    const st = orchestra.deviceState(d.id);
+    void hygiene.refreshDeviceDetails(d.id).catch(() => {});
+    const userRows = await rooms.listRooms(d.id, farm.APPS.tiktok).catch(() => []);
+    return {
+      id: d.id, model: info.model || d.model, android: info.android, battery: info.battery,
+      state: st.state, stateNote: st.reason || null, jobId: st.jobId || null,
+      users: (userRows.length ? userRows : [{ id: 0, name: 'Pemilik', empty: false }]).map((u) => ({
+        id: u.id, name: u.name, running: u.running, current: u.current, installed: u.installed, empty: u.empty,
+      })),
+    };
+  }));
+  res.json({ phones: rows });
+}));
+app.post('/api/create/tiktok/phone-run', strictLimiter, asyncH(async (req, res) => {
+  const { deviceId, navOnly, manualEmail, tempEmail, deviceUser } = req.body || {};
+  if (!deviceId) return res.status(400).json({ error: 'deviceId wajib' });
+  const devs = await farm.listDevices().catch(() => []);
+  if (!devs.some((d) => d.id === deviceId)) return res.status(400).json({ error: 'HP tidak terbaca ADB' });
+  // Spasi dibuang di sini juga: UI bisa mengirim tempelan yang membawa spasi,
+  // dan email berspasi tidak akan pernah diterima TikTok.
+  const manual = String(manualEmail || '').replace(/\s+/g, '').toLowerCase();
+  if (!manual && !tempEmail) {
+    return res.status(400).json({ error: 'pilih temp-mail tmailor atau isi email TikTok sendiri' });
+  }
+  if (manual && !/^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/.test(manual)) {
+    return res.status(400).json({ error: 'email TikTok tidak valid: ' + manual });
+  }
+  if (manual) {
+    const dupAcct = await db.rawAll('SELECT name FROM accounts WHERE lower(email) = ?', [manual]).catch(() => []);
+    if (dupAcct && dupAcct.length) return res.status(409).json({ error: `email ${manual} sudah terpakai akun "${dupAcct[0].name}" di panel` });
+  }
+  // Pilih room: UI bisa mengirim deviceUser; kalau kosong, ambil room kosong
+  // pertama. Jangan diam-diam jatuh ke Pemilik saat semua room terpakai.
+  let userRows = await rooms.listRooms(deviceId, farm.APPS.tiktok).catch(() => []);
+  if (!userRows.length) {
+    userRows = (await rooms.listUsers(deviceId).catch(() => [])).map((u) => ({
+      id: u.uid, name: u.nama, empty: false,
+    }));
+  }
+  const pilihEksplisit = deviceUser !== undefined && deviceUser !== null && String(deviceUser).trim() !== '';
+  let slotUser = pilihEksplisit ? Number(deviceUser) : null;
+  if (pilihEksplisit && (!Number.isInteger(slotUser) || slotUser < 0)) {
+    return res.status(400).json({ error: 'deviceUser tidak valid' });
+  }
+  if (slotUser !== null && slotUser > 0 && !userRows.some((u) => u.id === slotUser)) {
+    return res.status(400).json({ error: `room ${slotUser} tidak ada di HP` });
+  }
+  if (slotUser === null) {
+    const kosong = userRows.find((u) => u.id !== 0 && u.empty);
+    if (!kosong) {
+      return res.status(409).json({ error: 'Tidak ada room kosong. Buat room baru dulu, atau pilih Pemilik secara eksplisit.' });
+    }
+    slotUser = kosong.id;
+  }
+  const room = userRows.find((u) => u.id === slotUser);
+  // Alamat temp-mail belum ada di sini: sopir yang membuatnya saat job jalan lalu
+  // menulis alamat itu ke payload supaya panel dan run ulang memakai alamat sama.
+  const queued = orchestra.queueJob(deviceId, 'tiktok', {
+    email: manual, tempMail: !manual, via: 'hp', navOnly: !!navOnly,
+    mode: navOnly ? 'nav' : 'create', manualEmail: manual || null,
+    deviceUser: slotUser,
+    deviceUserName: room ? room.name : null,
+  });
+  if (queued.error) return res.status(409).json({ error: queued.error });
+  const logPath = path.join(__dirname, 'logs', `farm-driver-tiktok-${queued.id}.log`);
+  await fsp.mkdir(path.dirname(logPath), { recursive: true });
+  const fh = await fsp.open(logPath, 'a');
+  const args = [TIKTOK_DRIVER, queued.id];
+  if (!navOnly) args.push('--go');
+  let child;
+  try {
+    child = spawn(process.execPath, args, { cwd: __dirname, detached: true, windowsHide: true, stdio: ['ignore', fh.fd, fh.fd] });
+    child.unref();
+  } finally {
+    await fh.close().catch(() => {});
+  }
+  res.json({ ok: true, jobId: queued.id, deviceId, mode: navOnly ? 'nav' : 'create', email: manual, tempMail: !manual, deviceUser: slotUser, deviceUserName: room ? room.name : null });
+}));
+// Kode dari panel untuk sopir TikTok. Sopir mem-poll payload.otp tiap 15 dtk.
+// Ini juga cadangan saat pembacaan inbox tmailor gagal.
+app.post('/api/create/tiktok/phone-otp', strictLimiter, asyncH(async (req, res) => {
+  const { jobId, code } = req.body || {};
+  const digits = String(code || '').replace(/\D/g, '');
+  if (!jobId || digits.length < 4) return res.status(400).json({ error: 'jobId dan kode 4-8 angka wajib' });
+  const job = orchestra.getJob(String(jobId));
+  if (!job || job.platform !== 'tiktok') return res.status(404).json({ error: 'job TikTok tidak ditemukan' });
+  const r = orchestra.appendOtp(String(jobId), digits);
+  if (r.error) return res.status(404).json(r);
+  res.json({ ok: true });
+}));
+app.get('/api/create/tiktok/phone-jobs', asyncH(async (req, res) => {
+  const jobs = orchestra.listJobs('', 30).filter((j) => j.platform === 'tiktok').slice(0, 25);
+  res.json({ jobs });
 }));
 
 // ---- Tes kelayakan IP signup (probe): cek IP di-flag sebelum buang email ----
@@ -753,14 +1638,32 @@ app.get('/api/proxies', asyncH(async (req, res) => {
 }));
 
 app.post('/api/proxies', asyncH(async (req, res) => {
-  const { values } = req.body; // bisa string (satu) atau array
+  const { values, labels } = req.body; // bisa string (satu) atau array; labels opsional sejajar values
   if (!values) return res.status(400).json({ error: 'values wajib' });
   const arr = Array.isArray(values) ? values : [values];
-  for (const v of arr) { if (typeof v === 'string' && v.trim()) await db.addProxy(v.trim()); }
-  res.json({ ok: true, added: arr.length });
+  const larr = Array.isArray(labels) ? labels : (labels ? [labels] : []);
+  let added = 0;
+  for (let i = 0; i < arr.length; i++) {
+    const v = String(arr[i] || '').trim();
+    if (!v) continue;
+    await db.addProxy(v);
+    // addProxy INSERT OR IGNORE tanpa label — label dikanal lewat UPDATE bila baris baru.
+    if (larr[i] && db.setProxyLabel) await db.setProxyLabel(v, larr[i]);
+    added++;
+  }
+  res.json({ ok: true, added });
 }));
 
 app.delete('/api/proxies/:id', asyncH(async (req, res) => {
+  // Proxy hasil alokasi = IP lahir satu akun. Menghapusnya memutus login akun
+  // itu, jadi tolak selama masih terikat; operator bisa lepas dulu di halaman Akun.
+  const row = (await db.listProxies()).find((p) => Number(p.id) === Number(req.params.id));
+  if (row && row.source === 'auto-ip') {
+    const used = await db.accountsUsingProxy(row.value);
+    if (used.length) {
+      return res.status(409).json({ error: `Proxy ini IP lahir akun ${used.map((a) => a.name).join(', ')}. Lepas proxy dari akun itu dulu sebelum menghapus.` });
+    }
+  }
   await db.deleteProxy(Number(req.params.id));
   res.json({ ok: true });
 }));
@@ -825,6 +1728,15 @@ app.get('/api/proxies/pool/trend', asyncH(async (req, res) => {
 
 // Auto-monitor berkala (PHONE_MONITOR_INTERVAL_MIN=15 di .env; 0/nonaktif default).
 phonePool.startAutoMonitor();
+// Refresh sesi Gmail terjadwal: cek 6 jam, refresh sesi akun ok umur ≥10 hari
+// supaya badge "Sesi hidup" tidak pernah masuk zona kuning (14 hari).
+require('./src/gmail-session-refresh').startAuto();
+app.get('/api/gmail/session/refresh/status', asyncH(async (req, res) => {
+  res.json(require('./src/gmail-session-refresh').status());
+}));
+app.post('/api/gmail/session/refresh/run', strictLimiter, asyncH(async (req, res) => {
+  res.json(await require('./src/gmail-session-refresh').refreshDueAccounts());
+}));
 
 // Helper probe exit IP akun via browser headless (patchright) — dipakai probe-ip
 // manual dan PUT /:id/proxy (P3: auto-probe + sync fingerprint geo akun).
@@ -920,8 +1832,17 @@ app.post('/api/ig-likes/:id/run', asyncH(async (req, res) => {
   const account = await db.getAccountById(job.account_id);
   if (!account) return res.status(404).json({ error: 'Akun tidak ditemukan' });
   if (account.platform !== 'ig') return res.status(400).json({ error: `Job IG ini menunjuk akun ${account.platform} ("${account.name}") — hapus & buat ulang dengan akun Instagram` });
+  // Paritas jalur FB: eksekusi IG like lewat gerbang kebijakan yang sama
+  // (status + warming + cooldown + limit + rate) supaya akun tahap awal tidak
+  // seperti-kan postingan tanpa kurungan warming.
+  const gate = await accountGate.check(account.id, 'like');
+  if (!gate.ok) {
+    await db.rawAll(`UPDATE ig_like_jobs SET status = 'blocked', last_run_at = ? WHERE id = ?`, [new Date().toISOString(), job.id]);
+    return res.status(429).json({ error: 'Akun ditolak gerbang', reasons: gate.reasons });
+  }
   await db.rawAll(`UPDATE ig_like_jobs SET status = 'running' WHERE id = ?`, [job.id]);
   const result = await likeIgPosting(account, job.post_url);
+  if (result.ok) accountGate.record(account.id, 'like');
   await db.rawAll(`UPDATE ig_like_jobs SET status = ?, last_run_at = ? WHERE id = ?`,
     [result.ok ? 'done' : 'failed', new Date().toISOString(), job.id]);
   await db.logPost({ accountId: account.id, status: result.ok ? 'like_ok' : 'like_failed', message: 'IG Like: ' + (result.reason || job.name) });
@@ -937,7 +1858,28 @@ app.post('/api/ig/post', upload.single('media'), asyncH(async (req, res) => {
   if (!account) return res.status(404).json({ error: 'Akun tidak ditemukan' });
   if (account.platform !== 'ig') return res.status(400).json({ error: `Akun "${account.name}" itu ${account.platform}, bukan Instagram` });
   const mediaPath = path.join(UPLOAD_DIR, req.file.filename);
-  const result = await postToInstagram(account, mediaPath, caption || '');
+  // Komentar pertama (opsional): teks sama untuk akun ini, dicek gerbang komentar
+  // dulu supaya akun tahap warming tidak melanggar batas aksinya.
+  const autoComment = String(req.body.autoComment || '').trim().slice(0, 1000);
+  const commentGate = autoComment ? await accountGate.check(account.id, 'comment') : null;
+  const result = await postToInstagram(account, mediaPath, caption || '', {
+    autoComment: autoComment && (!commentGate || commentGate.ok) ? autoComment : '',
+  });
+  if (autoComment && commentGate && !commentGate.ok) {
+    result.comment = { ok: false, reason: 'gate', reasons: commentGate.reasons };
+  }
+  if (result.comment && result.comment.ok) {
+    accountGate.record(account.id, 'comment');
+    await db.logEngagement({
+      accountId: account.id, action: 'comment', targetUrl: result.comment.url || null,
+      commentText: autoComment, status: 'success', message: 'komentar otomatis setelah posting',
+    }).catch(() => {});
+  } else if (result.comment && !result.comment.ok) {
+    await db.logEngagement({
+      accountId: account.id, action: 'comment', targetUrl: result.comment.url || null,
+      commentText: autoComment, status: 'failed', message: result.comment.reason || null,
+    }).catch(() => {});
+  }
   await db.logPost({ accountId: account.id, status: result.ok ? 'posted' : 'post_failed', message: 'IG: ' + (result.reason || 'posted'), contentText: caption || '' });
   res.json(result);
 }));
@@ -1100,14 +2042,272 @@ app.post('/api/smm/like-orders/:id/cancel', asyncH(async (req, res) => {
   res.json({ ok: true, message: 'Order dibatalkan' });
 }));
 
+// ---- SMM Comment Orders (Auto Komentar FB/IG) ----
+// Target = jumlah komentar. Satu akun hanya meninggalkan satu komentar, jadi
+// target dibatasi jumlah akun aktif platform tersebut. Runner berjalan di
+// latar belakang agar jeda antar komentar tidak menggantung request HTTP.
+app.post('/api/smm/comment-orders', asyncH(async (req, res) => {
+  const { name, postUrl, targetComments, platform, commentText, aiContext } = req.body || {};
+  if (!name || !postUrl || !targetComments) {
+    return res.status(400).json({ error: 'name, postUrl, dan targetComments wajib' });
+  }
+  const target = Number(targetComments);
+  if (!Number.isInteger(target) || target < 1 || target > 1000) {
+    return res.status(400).json({ error: 'targetComments harus antara 1-1000' });
+  }
+  const plat = platform === 'ig' ? 'ig' : 'fb';
+  const text = typeof commentText === 'string' ? commentText.trim().slice(0, 1000) : '';
+  // Klien lama tidak mengirim aiContext; mode AI tetap menjadi bawaan.
+  const useAi = aiContext === undefined || aiContext === null
+    ? true
+    : !(aiContext === false || aiContext === 0 || aiContext === '0' || aiContext === 'false');
+  try {
+    const id = await db.createSmmCommentOrder({
+      name: String(name).trim().slice(0, 160),
+      postUrl: String(postUrl).trim(),
+      targetComments: target,
+      platform: plat,
+      commentText: text || null,
+      aiContext: useAi,
+    });
+    res.json({ id, message: 'Order komentar dibuat. Tekan Jalankan untuk mulai.' });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+}));
+
+// Pratinjau hanya diperbolehkan untuk domain platform yang sesuai. Tanpa
+// batas ini, sesi akun operator bisa dipakai membuka situs sembarang.
+function isPlatformPostUrl(raw, platform) {
+  let url;
+  try { url = new URL(String(raw)); } catch (e) { return false; }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return false;
+  const host = url.hostname.toLowerCase();
+  if (platform === 'ig') return host === 'instagram.com' || host.endsWith('.instagram.com');
+  return ['facebook.com', 'fb.com', 'fb.watch', 'fb.me']
+    .some((domain) => host === domain || host.endsWith('.' + domain));
+}
+
+app.post('/api/smm/comment-orders/preview', strictLimiter, asyncH(async (req, res) => {
+  const { postUrl, platform } = req.body || {};
+  const plat = platform === 'ig' ? 'ig' : 'fb';
+  const label = plat === 'ig' ? 'Instagram' : 'Facebook';
+  const url = String(postUrl || '').trim();
+  if (!isPlatformPostUrl(url, plat)) {
+    return res.status(400).json({ error: `URL harus mengarah ke postingan ${label}.` });
+  }
+  if (!aiConfig.load().apiKey) {
+    return res.status(400).json({ error: 'AI belum tersambung. Isi key di Pengaturan AI sebelum membuat pratinjau.' });
+  }
+
+  // Akun yang paling baru login lebih mungkin masih punya sesi untuk membaca
+  // kiriman. Kalau tetap ditolak, pesan error menyebut akun yang dicoba.
+  const rows = await db.rawAll(
+    `SELECT id FROM accounts WHERE platform = ? AND status = 'active' ORDER BY last_login DESC, id LIMIT 1`,
+    [plat]
+  );
+  if (!rows.length) {
+    return res.status(400).json({ error: `Tidak ada akun aktif ${label}. Aktifkan akun dulu di halaman Akun.` });
+  }
+  const account = await db.getAccountById(rows[0].id);
+  if (!account) {
+    return res.status(400).json({ error: `Akun aktif ${label} tidak ditemukan.` });
+  }
+
+  const read = await commentAutomation.readPostForPreview(account, url, plat);
+  if (!read.ok) {
+    const reason = String(read.reason || 'gagal');
+    let error;
+    if (reason === 'not_logged_in') {
+      error = `Akun ${account.name} tidak sedang login. Buka akun itu di halaman Akun, lalu coba lagi.`;
+    } else if (reason === 'konteks_tidak_terbaca') {
+      error = 'Teks postingan tidak terbaca. Pastikan URL membuka kiriman, bukan beranda atau halaman login.';
+    } else {
+      error = 'Gagal membaca postingan: ' + reason.replace(/^error:\s*/i, '').slice(0, 220);
+    }
+    return res.status(422).json({ error });
+  }
+
+  try {
+    const { clean } = require('./src/comment-order-runner');
+    const comment = clean(await aiContentGenerator.generateComment(
+      read.context,
+      'Ini pratinjau satu komentar. Tulis komentar pertama yang relevan dengan postingan.'
+    ));
+    if (!comment) throw new Error('AI mengembalikan komentar kosong.');
+    res.json({
+      ok: true,
+      context: read.context,
+      comment,
+      account: { id: account.id, name: account.name },
+    });
+  } catch (e) {
+    res.status(502).json({
+      error: 'AI gagal menyusun komentar: ' + e.message,
+      context: read.context,
+      account: { id: account.id, name: account.name },
+    });
+  }
+}));
+
+app.get('/api/smm/comment-orders', asyncH(async (req, res) => {
+  res.json(await db.listSmmCommentOrders());
+}));
+
+app.get('/api/smm/comment-orders/:id', asyncH(async (req, res) => {
+  const order = await db.getSmmCommentOrder(Number(req.params.id));
+  if (!order) return res.status(404).json({ error: 'Order tidak ditemukan' });
+  res.json(order);
+}));
+
+app.post('/api/smm/comment-orders/:id/run', asyncH(async (req, res) => {
+  const id = Number(req.params.id);
+  const order = await db.getSmmCommentOrder(id);
+  if (!order) return res.status(404).json({ error: 'Order tidak ditemukan' });
+  if (order.status === 'cancelled') return res.status(400).json({ error: 'Order sudah dihentikan' });
+  if (Number(order.completed_comments) >= Number(order.target_comments)) {
+    return res.status(400).json({ error: 'Order sudah selesai' });
+  }
+  // Order yang berhenti karena semua eksekusi gagal boleh dicoba lagi: kembalikan
+  // yang gagal ke antrean, lalu rotasi akun memilih pengganti yang sehat.
+  if (order.status === 'failed') await db.resetFailedSmmCommentExecutions(id);
+  await db.setSmmCommentOrderStatus(id, 'running');
+  const commentOrderRunner = require('./src/comment-order-runner');
+  const started = commentOrderRunner.start(id);
+  res.json({ started, message: started ? 'Order berjalan di latar belakang.' : 'Order ini sedang berjalan.' });
+}));
+
+app.post('/api/smm/comment-orders/:id/cancel', asyncH(async (req, res) => {
+  const id = Number(req.params.id);
+  if (!(await db.getSmmCommentOrder(id))) return res.status(404).json({ error: 'Order tidak ditemukan' });
+  await db.cancelSmmCommentOrder(id);
+  res.json({ ok: true, message: 'Order dihentikan. Komentar yang sedang diproses tetap diselesaikan.' });
+}));
+
+app.delete('/api/smm/comment-orders/:id', asyncH(async (req, res) => {
+  await db.deleteSmmCommentOrder(Number(req.params.id));
+  res.json({ ok: true });
+}));
+
 // ---- AI ----
+// Konfigurasi koneksi AI yang bisa diubah dari halaman AI. Key tidak pernah
+// dikirim balik: publicConfig hanya memberi petunjuk samaran dan sumbernya.
+app.get('/api/ai/config', (req, res) => {
+  res.json(aiConfig.publicConfig());
+});
+
+app.put('/api/ai/config', (req, res) => {
+  try {
+    res.json(aiConfig.save(req.body || {}));
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+// Daftar model dari Base URL yang sedang diisi. Nilai formulir boleh dikirim
+// sebelum disimpan supaya operator bisa memeriksa koneksi baru lebih dulu.
+app.post('/api/ai/models', asyncH(async (req, res) => {
+  const { listModels } = require('./src/ai');
+  const { baseUrl: base, apiKey: key } = req.body || {};
+  try {
+    const models = await listModels({ baseUrl: base, apiKey: key });
+    res.json({ models });
+  } catch (e) {
+    res.status(502).json({ error: e.message });
+  }
+}));
+
+app.post('/api/ai/test', asyncH(async (req, res) => {
+  const { testConnection } = require('./src/ai');
+  const { baseUrl: base, model, apiKey: key, reasoningEffort } = req.body || {};
+  try {
+    res.json(await testConnection({ baseUrl: base, model, apiKey: key, reasoningEffort }));
+  } catch (e) {
+    res.status(502).json({ error: e.message });
+  }
+}));
+
 // Generate konten pakai AI.
 app.post('/api/ai/generate', asyncH(async (req, res) => {
   const { generateContent } = require('./src/ai');
-  const { prompt } = req.body;
+  const { prompt } = req.body || {};
   if (!prompt) return res.status(400).json({ error: 'prompt wajib' });
-  const content = await generateContent(prompt);
-  res.json({ content });
+  try {
+    const content = await generateContent(prompt);
+    res.json({ content });
+  } catch (e) {
+    // Pesan kuota/model/key harus sampai ke operator, bukan ditelan handler
+    // error global yang mengganti semuanya menjadi "Internal server error".
+    res.status(502).json({ error: e.message });
+  }
+}));
+
+// Variasi caption untuk banyak akun: satu topik, tiap akun dapat kalimat dan
+// deskripsi gambar sendiri supaya kiriman massal tidak identik.
+app.post('/api/ai/captions', asyncH(async (req, res) => {
+  const { generateCaptionVariants } = require('./src/ai');
+  const { topic, count, platform } = req.body;
+  if (!topic || !String(topic).trim()) return res.status(400).json({ error: 'topic wajib' });
+  const n = Math.min(Math.max(Number(count) || 1, 1), 20);
+  try {
+    const variants = await generateCaptionVariants({
+      topic: String(topic).trim().slice(0, 400),
+      count: n,
+      platform: platform === 'ig' ? 'Instagram' : 'Facebook',
+    });
+    res.json({ variants });
+  } catch (e) {
+    // Pesan provider (kuota/model) harus sampai ke operator, bukan ditelan
+    // handler error global yang mengganti 500 menjadi "Internal server error".
+    res.status(502).json({ error: e.message });
+  }
+}));
+
+// Gambar posting AI: server yang mengunduh supaya browser hanya menerima bytes
+// dari origin sendiri, lalu memasangnya ke FormData tanpa URL lintas origin.
+app.get('/api/ai/image', asyncH(async (req, res) => {
+  const { generateImage } = require('./src/ai-image');
+  const prompt = String(req.query.prompt || '').trim();
+  if (!prompt) return res.status(400).json({ error: 'prompt wajib' });
+  try {
+    const img = await generateImage({
+      prompt: prompt.slice(0, 600),
+      seed: Number(req.query.seed) || undefined,
+      // Model dipilih operator di panel; modul gambar yang memvalidasi daftarnya.
+      model: String(req.query.model || ''),
+      width: Math.min(Math.max(Number(req.query.width) || 1024, 320), 1440),
+      height: Math.min(Math.max(Number(req.query.height) || 1024, 320), 1440),
+    });
+    res.set('Content-Type', img.type);
+    res.set('Cache-Control', 'no-store');
+    // Asal gambar ikut dikirim supaya UI bisa menyebut penyedianya tanpa
+    // menebak dari nama file atau jam pembuatan.
+    if (img.provider) res.set('X-Image-Provider', img.provider);
+    if (img.model) res.set('X-Image-Model', img.model);
+    res.send(img.buffer);
+  } catch (e) {
+    res.status(e.statusCode || 502).json({ error: e.message, retryAfter: e.retryAfter || null });
+  }
+}));
+
+// Topik mentah tidak layak jadi prompt gambar, jadi diterjemahkan dulu lewat
+// model teks; dari panggilan yang sama diambil teks kartu berita (kicker, judul,
+// detail). Kalau AI belum punya key atau sedang gagal, endpoint tetap
+// mengembalikan topik apa adanya supaya tombol Gambar AI tidak ikut mati.
+app.post('/api/ai/image-prompt', asyncH(async (req, res) => {
+  const { generateImageBrief } = require('./src/ai');
+  const body = req.body || {};
+  const topic = String(body.topic || '').trim();
+  if (!topic) return res.status(400).json({ error: 'topic wajib' });
+  try {
+    const brief = await generateImageBrief({
+      topic: topic.slice(0, 300),
+      caption: String(body.caption || '').slice(0, 400),
+    });
+    res.json({ prompt: brief.prompt, news: brief.news, source: 'ai' });
+  } catch (e) {
+    res.json({ prompt: topic, news: null, source: 'topic', error: e.message });
+  }
 }));
 
 // Aktivasi via login: panggil fb-login-check / ig-relogin dengan profil persisten akun.
@@ -1119,10 +2319,26 @@ app.post('/api/accounts/:id/activate-login', asyncH(async (req, res) => {
   res.json(r);
 }));
 app.get('/api/accounts/:id/activate-login/status', asyncH(async (req, res) => {
-  res.json(createRunner.activationStatus(Number(req.params.id)));
+  const id = Number(req.params.id);
+  const account = await db.getAccountById(id);
+  const st = createRunner.activationStatus(id);
+  res.json({ ...st, keepOpen: account ? createRunner.activationKeepOpen(account).open : false });
+}));
+// Tutup browser yang dibiarkan terbuka setelah login berhasil (proses keep-open).
+app.post('/api/accounts/:id/activate-login/close-browser', asyncH(async (req, res) => {
+  const account = await db.getAccountById(Number(req.params.id));
+  if (!account) return res.status(404).json({ error: 'Akun tidak ditemukan' });
+  const r = createRunner.closeActivationBrowser(account);
+  if (r.error === 'tidak_ada_browser_terbuka') return res.status(409).json(r);
+  if (r.error) return res.status(500).json(r);
+  res.json(r);
 }));
 app.post('/api/accounts/:id/activate-login/stop', asyncH(async (req, res) => {
   res.json(createRunner.stopActivation(Number(req.params.id)));
+}));
+// Semua job aktivasi (terbaru dulu): panel memulihkan kartu status saat dibuka.
+app.get('/api/activations', asyncH(async (req, res) => {
+  res.json(await createRunner.activationsStatus());
 }));
 
 // Login otomatis untuk satu akun (browser terbuka). Hanya kasih hasil panjang (web dev only).
@@ -1150,15 +2366,18 @@ app.post('/api/accounts/:id/open', asyncH(async (req, res) => {
   const { openAccountBrowser } = require('./src/browser');
   const account = await db.getAccountById(Number(req.params.id));
   if (!account) return res.status(404).json({ error: 'Akun tidak ditemukan' });
-  const { context, browser } = await openAccountBrowser(account, { headless: false });
+  // IG dibuka mode mobile (paritas daftar/aktivasi — tampilan seperti HP):
+  // FB tetap desktop fingerprint (nilainya fp.viewport 1366x768).
+  const isIgPre = account.platform === 'ig' || account.platform === 'instagram';
+  const { context, browser, profile } = await openAccountBrowser(account, { headless: false, mobile: isIgPre });
   // Arah ke platform akun masing-masing (bukan selalu FB).
   const isIg = account.platform === 'ig' || account.platform === 'instagram';
   const homeUrl = isIg ? 'https://www.instagram.com/' : 'https://www.facebook.com/';
   // Suntik cookie login tersimpan (kanonis: sessions/<nama>/cookies.json, legacy: sessions/ig-<nama>-*.json)
+  let sess = null;
   try {
     const fs = require('fs');
     const sessDir = path.join(__dirname, 'sessions');
-    let sess = null;
     const canonDir = path.join(sessDir, account.name);
     const canonFiles = ['cookies.json', 'manual-1.json'];
     for (const f of canonFiles) {
@@ -1182,7 +2401,37 @@ app.post('/api/accounts/:id/open', asyncH(async (req, res) => {
   const page = await context.newPage();
   await page.goto(homeUrl, { waitUntil: 'domcontentloaded' }).catch((e) => console.error('[open] goto gagal:', e.message));
   console.log(`[open] browser profil "${account.name}" dibuka & arah ke ${homeUrl} (kept alive).`);
-  res.json({ ok: true });
+  // Sinkron sesi: cookies context saat ini (termasuk yang IG segarkan saat membuka
+  // halaman, atau hasil operator menekan one-tap "Lanjutkan") ditulis balik ke
+  // sessions/<nama>/cookies.json supaya pembukaan BERIKUTNYA langsung beranda.
+  setTimeout(() => {
+    context.cookies().then(async (cks) => {
+      if (!cks || !cks.length) return;
+      const canonDir = path.join(__dirname, 'sessions', account.name);
+      const canonPath = path.join(canonDir, 'cookies.json');
+      const old = fs.existsSync(canonPath) ? JSON.parse(fs.readFileSync(canonPath, 'utf8')) : {};
+      fs.mkdirSync(canonDir, { recursive: true });
+      fs.writeFileSync(canonPath, JSON.stringify({
+        ...old,
+        platform: isIg ? 'instagram' : 'facebook', username: account.name, email: account.email,
+        proxy: account.proxy || old.proxy, cookies: cks, updated_from: 'open',
+        updated_at: new Date().toISOString(),
+      }, null, 2));
+      console.log(`[open] ${cks.length} cookie disinkron ke ${path.relative(__dirname, canonPath)}`);
+    }).catch(() => {});
+  }, 15000); // beri waktu IG menetapkan sesi (one-tap "Lanjutkan" dimuat + diklik)
+  // Membuka browser profil = aktivitas login-ish: last_login ikut dicatat supaya
+  // kolom "Login Terakhir" tidak menampilkan "–" untuk akun yang tipis dibuka.
+  db.setAccountLastLogin(account.id).catch(() => {});
+  // Detail profil Chrome + cookie + proxy: biar panel bisa menampilkan apa yang
+  // benar-benar dipakai browser ini (bukan tebakan) — ditempatkan sekali di sini.
+  const sessCookieCount = sess && Array.isArray(sess.cookies) ? sess.cookies.length : 0;
+  res.json({
+    ok: true,
+    home: homeUrl,
+    cookies: sessCookieCount,
+    profile,
+  });
 }));
 
 // Alias lama: /open-ig kini sama dengan /open (ikut platform akun). Disimpan biar tombol lama tidak 404.
@@ -1201,7 +2450,26 @@ app.post('/api/accounts/:id/post-now', upload.single('media'), asyncH(async (req
   const account = await db.getAccountById(Number(req.params.id));
   if (!account) return res.status(404).json({ error: 'Akun tidak ditemukan' });
   const mediaPath = req.file ? path.join(UPLOAD_DIR, req.file.filename) : null;
-  const result = await postToTimeline(account, content, mediaPath);
+  const autoComment = String(req.body.autoComment || '').trim().slice(0, 1000);
+  const commentGate = autoComment ? await accountGate.check(account.id, 'comment') : null;
+  const result = await postToTimeline(account, content, mediaPath, {
+    autoComment: autoComment && (!commentGate || commentGate.ok) ? autoComment : '',
+  });
+  if (autoComment && commentGate && !commentGate.ok) {
+    result.comment = { ok: false, reason: 'gate', reasons: commentGate.reasons };
+  }
+  if (result.comment && result.comment.ok) {
+    accountGate.record(account.id, 'comment');
+    await db.logEngagement({
+      accountId: account.id, action: 'comment', targetUrl: result.comment.url || null,
+      commentText: autoComment, status: 'success', message: 'komentar otomatis setelah posting',
+    }).catch(() => {});
+  } else if (result.comment && !result.comment.ok) {
+    await db.logEngagement({
+      accountId: account.id, action: 'comment', targetUrl: result.comment.url || null,
+      commentText: autoComment, status: 'failed', message: result.comment.reason || null,
+    }).catch(() => {});
+  }
   if (result.ok) {
     await db.logPost({ accountId: account.id, status: 'posted', message: 'Posting langsung berhasil', contentText: content });
   } else {
@@ -1781,6 +3049,23 @@ app.post('/api/farm/jobs/:id/otp', asyncH(async (req, res) => {
   if (r.error) return res.status(404).json(r);
   res.json({ ok: true });
 }));
+// Nomor HP dari panel untuk job HP: operator ketik nomor di sini, SISTEM yang
+// mengetikkan ke HP (sopir langkah 7 mem-poll payload.phone tiap 15 dtk).
+// Format: digit saja, 9-15 digit (awalan 08 atau 628xx sama-sama diterima).
+app.post('/api/farm/jobs/:id/phone', strictLimiter, asyncH(async (req, res) => {
+  const digits = String((req.body || {}).phone || '').replace(/\D/g, '').slice(0, 15);
+  if (digits.length < 9) return res.status(400).json({ error: 'phone wajib 9-15 digit.' });
+  const r = orchestra.appendPhone(req.params.id, digits);
+  if (r.error) return res.status(404).json(r);
+  res.json({ ok: true, mask: `***${digits.slice(-4)}` });
+}));
+// Stop job HP dari panel: tandai cancelled, sopir berhenti sendiri ≤15 dtk &
+// HP dikembalikan ke user asal. Device grace 60 dtk anti-tabrakan job baru.
+app.post('/api/farm/jobs/:id/cancel', strictLimiter, asyncH(async (req, res) => {
+  const r = orchestra.cancelJob(req.params.id, String((req.body || {}).note || 'dibatalkan operator'));
+  if (r.error) return res.status(404).json(r);
+  res.json({ ok: true });
+}));
 
 // Auto-OTP: ambil kode dari inbox mail worker (email job) — tanpa tempel manual.
 // Dasar: email = payload.email (mis. nama@windevpanel.my.id); alias = bagian sebelum @.
@@ -1811,7 +3096,7 @@ const hygiene = require('./src/phone-hygiene');
 const hygieneRuns = new Map(); // deviceId -> {running, log[], startedAt, result, error}
 app.post('/api/farm/hygiene/:id', asyncH(async (req, res) => {
   const id = String(req.params.id);
-  const mode = ['cek', 'ig', 'ads', 'ip', 'semua'].includes(String((req.body || {}).mode)) ? String(req.body.mode) : 'semua';
+  const mode = ['cek', 'ig', 'fb', 'ads', 'ip', 'semua'].includes(String((req.body || {}).mode)) ? String(req.body.mode) : 'semua';
   const st = hygieneRuns.get(id);
   if (st && st.running) return res.status(409).json({ error: 'higiene sedang jalan untuk HP ini.' });
   const entry = { running: true, mode, log: [], startedAt: new Date().toISOString(), result: null, error: null };
@@ -1972,7 +3257,17 @@ app.get('/api/captcha/stats', asyncH(async (req, res) => {
 }));
 
 // ==== AI Content Generator API ====
-app.post('/api/ai/caption', asyncH(async (req, res) => {
+// Error provider (key, kuota, model) diteruskan apa adanya supaya halaman AI
+// bisa menampilkan penyebabnya, bukan "Internal server error".
+const aiRoute = (fn) => asyncH(async (req, res) => {
+  try {
+    await fn(req, res);
+  } catch (e) {
+    res.status(502).json({ error: e.message });
+  }
+});
+
+app.post('/api/ai/caption', aiRoute(async (req, res) => {
   const { topic, style, length, platform, emojis } = req.body;
   
   if (!topic) {
@@ -1990,7 +3285,7 @@ app.post('/api/ai/caption', asyncH(async (req, res) => {
   res.json({ caption });
 }));
 
-app.post('/api/ai/hashtags', asyncH(async (req, res) => {
+app.post('/api/ai/hashtags', aiRoute(async (req, res) => {
   const { topic, count } = req.body;
   
   if (!topic) {
@@ -2001,7 +3296,7 @@ app.post('/api/ai/hashtags', asyncH(async (req, res) => {
   res.json({ hashtags });
 }));
 
-app.post('/api/ai/rewrite', asyncH(async (req, res) => {
+app.post('/api/ai/rewrite', aiRoute(async (req, res) => {
   const { content, tone } = req.body;
   
   if (!content) {
@@ -2012,7 +3307,7 @@ app.post('/api/ai/rewrite', asyncH(async (req, res) => {
   res.json({ content: rewritten });
 }));
 
-app.post('/api/ai/comment', asyncH(async (req, res) => {
+app.post('/api/ai/comment', aiRoute(async (req, res) => {
   const { postContent, commentContext } = req.body;
   
   if (!postContent) {
@@ -2185,6 +3480,16 @@ app.post('/api/comment/batch', asyncH(async (req, res) => {
   });
 }));
 
+// Papan tangga warming: per akun IG, tahap + aksi terbuka hari ini + sisa kuota.
+// Dipakai strip Engagement/Varming agar aturan "kapan kran aksi dibuka" terlihat,
+// bukan tebakan (persepsi alasan gate dibaca dari endpoint gate biasa).
+app.get('/api/gate/:accountId/quota', asyncH(async (req, res) => {
+  if (!(await db.getAccountById(Number(req.params.accountId)))) {
+    return res.status(404).json({ error: 'Akun tidak ditemukan' });
+  }
+  res.json(await accountGate.getActionQuota(Number(req.params.accountId)));
+}));
+
 // Riwayat engagement (dipakai halaman History): filter akun + jenis aksi.
 app.get('/api/engagement/log', asyncH(async (req, res) => {
   const rows = await db.listEngagementLog({
@@ -2261,6 +3566,36 @@ app.post('/api/dm/bulk', asyncH(async (req, res) => {
   res.json({ results });
 }));
 
+// SOP onboarding: ringkasan akun IG muda + status dandan/post/interaksi harian.
+const onboardingSop = require('./src/onboarding-sop');
+// File config SOP kecil (nyala/mati + window jam) — pisah dari warming-scheduler.
+const fsSop = require('fs');
+const SOP_CFG = path.join(__dirname, 'config', 'sop-config.json');
+function sopConfig() {
+  try { return { ...{ enabled: false, window: '07–10' }, ...JSON.parse(fsSop.readFileSync(SOP_CFG, 'utf8')) }; }
+  catch (e) { return { enabled: false, window: '07–10' }; }
+}
+let sopLastAt = '';
+try { sopLastAt = (JSON.parse(fsSop.readFileSync(path.join(__dirname, 'logs', 'sop-last.json'), 'utf8')).at || '').slice(0, 10); } catch (e) { /* belum ada */ }
+app.get('/api/sop/overview', asyncH(async (req, res) => {
+  res.json(await onboardingSop.panelOverview());
+}));
+app.get('/api/sop/config', asyncH(async (req, res) => {
+  res.json({ ...sopConfig(), lastRunAt: sopLastAt });
+}));
+app.post('/api/sop/config', asyncH(async (req, res) => {
+  const cfg = { ...sopConfig(), enabled: !!(req.body && req.body.enabled) };
+  fsSop.mkdirSync(path.dirname(SOP_CFG), { recursive: true });
+  fsSop.writeFileSync(SOP_CFG, JSON.stringify(cfg, null, 2));
+  // Worker membaca config tiap siklus cron (20 mnt) — ambil live dari file.
+  res.json({ ...cfg, lastRunAt: sopLastAt });
+}));
+
+// Jalankan manual SOP 1 akun dari panel (tombol "Jalankan ritual").
+app.post('/api/sop/run/:accountId', asyncH(async (req, res) => {
+  res.json(await onboardingSop.runAccount(Number(req.params.accountId), (k, m) => console.log(`[sop] ${m}`)));
+}));
+
 // ==== Story Automation API ====
 app.post('/api/story/post', asyncH(async (req, res) => {
   const { accountId, mediaPath, caption, link, mentions, platform } = req.body;
@@ -2314,6 +3649,22 @@ app.use((err, req, res, next) => {
 const PORT = Number(process.env.PORT) > 0 ? Number(process.env.PORT) : 3000; // PORT=0 dari env luar tak valid → fallback 3000
 db.load().then(() => {
   farmWatchdog.start();
+  // Cek biner adb saat start: kalau yang terpasang rusak (mis. adb bawaan scrcpy
+  // yang crash), Phone Farm tampak "tanpa HP" tanpa penjelasan. Tulis di log.
+  farm.diagnose().then((rows) => {
+    for (const r of rows) console.log(`[adb] ${r.ok ? 'siap ' : r.broken ? 'RUSAK' : 'GAGAL'} ${r.bin} — ${r.ok ? `${r.devices} HP terdeteksi` : r.reason}`);
+    const sehat = rows.filter((r) => r.ok);
+    if (!sehat.length) {
+      console.warn('[adb] PERINGATAN: tidak ada adb yang bisa dipakai, Phone Farm tidak akan melihat HP.');
+      console.warn('[adb] Perbaiki: isi ADB_PATH di .env dengan path adb yang berfungsi (mis. C:/platform-tools/platform-tools/adb.exe).');
+      return;
+    }
+    // Sama dengan urutan pilihan adbPath(): yang melihat HP menang, kalau tidak ada
+    // yang melihat HP pakai kandidat sehat pertama.
+    const pilih = sehat.find((r) => r.devices > 0) || sehat[0];
+    console.log(`[adb] dipakai: ${pilih.bin}`);
+    if (!pilih.devices) console.warn('[adb] belum ada HP terlihat di USB; panel akan menampilkan 0 HP sampai HP dicolok dan USB debugging aktif.');
+  }).catch(() => { /* diagnosa bersifat informasi, jangan gagalkan start */ });
   server.listen(PORT, () => {
     console.log(`Dashboard: http://localhost:${PORT}`);
     console.log(`WebSocket: ws://localhost:${PORT}`);

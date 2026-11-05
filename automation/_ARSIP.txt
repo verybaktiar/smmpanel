@@ -1,0 +1,4 @@
+# ARSIP - jangan dipakai
+
+Sumber resmi kreator FB: src/fb-account-creator.js
+File ini (automation/fb-signup.js) versi lama, disimpan untuk referensi.

@@ -1,15 +1,32 @@
-/* Phone Farm — monitoring profesional: header KPI, rail perangkat, panel kendali, jobs & higiene. */
+/* Phone Farm: monitoring operasional: header KPI, rail perangkat, panel kendali, jobs & higiene. */
 .farm-bar { align-items: center; }
 
 /* ---- Hero + KPI ---- */
 .farm-hero { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
 .farm-kpis { display: flex; gap: 10px; flex-wrap: wrap; }
-.farm-kpi { min-width: 96px; padding: 10px 16px; border-radius: 14px; border: 1px solid rgba(255,255,255,.09); background: rgba(255,255,255,.03); }
+.farm-kpi { min-width: 96px; padding: 10px 16px; border-radius: 14px; border: 1px solid rgba(255,255,255,.11); background: rgba(255,255,255,.03); }
 .farm-kpi b { display: block; font-size: 20px; line-height: 1.2; }
 .farm-kpi span { font-size: 11.5px; color: #9b9ba3; letter-spacing: .4px; text-transform: uppercase; }
 .farm-kpi.online b { color: #4ade80; }
 .farm-kpi.working b { color: #fbbf24; }
 .farm-kpi.locked b { color: #f87171; }
+
+/* ---- Diagnosa adb ---- */
+.farm-adb { margin-bottom: 16px; }
+.farm-adb-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.farm-adb-head h3 { margin: 0; font-size: 14px; }
+.farm-adb-sum { margin: 10px 0 0; font-size: 12.5px; line-height: 1.6; color: #d6dae0; word-break: break-word; min-width: 0; }
+.farm-adb-sum code, .farm-adb-list code { font-family: ui-monospace, monospace; font-size: 12px; color: #e6e6ea; background: rgba(0,0,0,.3); padding: 2px 6px; border-radius: 6px; overflow-wrap: anywhere; }
+.farm-adb-list { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.farm-adb-list li { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; font-size: 12.5px; min-width: 0; }
+.farm-adb-note { font-size: 12px; color: #9b9ba3; }
+.farm-adb-hint { margin: 8px 0 0; font-size: 12px; }
+
+/* ---- Room tamu ---- */
+.farm-rooms { margin-bottom: 16px; }
+.farm-rooms-sum { margin: 10px 0 0; max-width: 72ch; font-size: 12.5px; line-height: 1.55; }
+.farm-rooms .farm-adb-list li { align-items: baseline; }
+.farm-rooms-model { font-size: 12.5px; color: #e6e6ea; font-weight: 500; white-space: nowrap; }
 
 /* ---- Rail perangkat ---- */
 .farm-rail { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; margin-bottom: 16px; }
@@ -44,17 +61,27 @@
 .farm-ctl { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 .farm-ctl .card { margin: 0; }
 .farm-ctl h3 { margin: 0 0 12px; font-size: 14px; }
-.farm-row { display: flex; gap: 8px; }
-.farm-row .inp { flex: 1; min-width: 0; }
+.farm-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.farm-row .inp { flex: 1; min-width: 180px; }
 .farm-keys { display: flex; gap: 8px; flex-wrap: wrap; }
 
 /* ---- Jobs ---- */
-.farm-jobs { display: flex; flex-direction: column; gap: 10px; max-height: 320px; overflow: auto; }
-.farm-job { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border: 1px solid rgba(255,255,255,.08); border-radius: 12px; background: rgba(255,255,255,.02); }
+.farm-jobs { display: flex; flex-direction: column; gap: 10px; max-height: 440px; overflow: auto; padding-right: 4px; }
+.farm-job { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; border: 1px solid rgba(255,255,255,.11); border-radius: 14px; background: rgba(255,255,255,.022); }
+.farm-job.is-working { border-color: rgba(251,191,36,.45); background: linear-gradient(180deg, rgba(251,191,36,.07), rgba(255,255,255,.02)); }
+.farm-job-top { display: flex; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+.farm-job-main { flex: 1; min-width: 180px; display: flex; flex-direction: column; gap: 4px; }
+.farm-job-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.farm-job-head strong { font-size: 13.5px; color: #f5f6f8; }
+.farm-job-head .muted { font-size: 12px; }
 .farm-job-id { font-family: ui-monospace, monospace; font-size: 12px; color: #9b9ba3; }
-.farm-job-note { flex: 1; min-width: 0; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.farm-progress { height: 6px; border-radius: 9999px; background: rgba(255,255,255,.08); overflow: hidden; margin-top: 6px; }
-.farm-progress i { display: block; height: 100%; border-radius: 9999px; background: linear-gradient(90deg, #6366f1, #8b5cf6); transition: width .3s; }
+.farm-job-note { font-size: 12.5px; line-height: 1.5; color: #d6dae0; word-break: break-word; }
+.farm-stop-btn { min-height: 36px; padding: 6px 14px; }
+.farm-progress { height: 6px; border-radius: 9999px; background: rgba(255,255,255,.09); overflow: hidden; }
+.farm-progress i { display: block; height: 100%; border-radius: 9999px; background: linear-gradient(90deg, #494fdf, #34d9ae); transition: width .3s; }
+.farm-job-inputs { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,.08); }
+.farm-input-group { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.farm-input-group .inp { flex: 1; min-width: 130px; }
 .farm-progress.anim i { position: relative; }
 .farm-progress.anim i::after {
   content: ''; position: absolute; inset: 0; border-radius: 9999px;

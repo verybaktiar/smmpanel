@@ -1,0 +1,37 @@
+{
+  "name": "smmpanel",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node server.js",
+    "server": "node server.js",
+    "scheduler": "node index.js",
+    "worker": "node worker.js",
+    "cli": "node cli.js",
+    "dev": "node server.js",
+    "dev:all": "concurrently \"npm run server\" \"npm run worker\""
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.6.2",
+    "helmet": "^8.3.0",
+    "multer": "^2.2.0",
+    "node-cron": "^4.6.0",
+    "patchright": "^1.63.0",
+    "pg": "^8.23.0",
+    "playwright": "^1.62.1",
+    "socket.io": "^4.8.3",
+    "sql.js": "^1.14.2",
+    "tmailor": "^0.1.0"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.5"
+  }
+}

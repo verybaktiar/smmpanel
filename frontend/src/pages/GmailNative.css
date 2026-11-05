@@ -1,0 +1,113 @@
+/* Kelahiran Gmail (HP): badge verdict, password mono, tabel 7 kolom. */
+.gnb-badge {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: 9999px;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+.gnb-badge.ok { background: rgba(46,196,120,.15); color: #57d99a; border-color: rgba(46,196,120,.35); }
+.gnb-badge.warn { background: rgba(240,180,41,.12); color: #f0b429; border-color: rgba(240,180,41,.3); }
+.gnb-badge.bad { background: rgba(235,87,87,.14); color: #ef7373; border-color: rgba(235,87,87,.32); }
+.gnb-badge.off { background: rgba(160,170,185,.12); color: #a9b4c4; border-color: rgba(160,170,185,.28); }
+
+.gnb-pw { font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; font-size: 12.5px; }
+
+/* 9 kolom (pilih + 7 data + aksi) butuh lebar lebih dari default .tbl sebelum di-scroll. */
+.table-wrap .gnb-tbl { min-width: 920px; }
+
+/* Baris bisa diklik untuk membuka detail run. */
+.gnb-tbl tbody tr { cursor: pointer; }
+
+/* Modal detail run: daftar field + screenshot HP. */
+.gnb-modal { width: min(560px, calc(100vw - 32px)); }
+.gnb-detail { margin: 16px 0 0; display: grid; gap: 9px; }
+.gnb-detail > div { display: flex; gap: 12px; align-items: baseline; }
+.gnb-detail dt {
+  flex: none;
+  width: 132px;
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: #8b93a3;
+}
+.gnb-detail dd { margin: 0; font-size: 13.5px; word-break: break-word; }
+.gnb-shot { width: 100%; margin-top: 14px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, .08); display: block; }
+.gnb-shot-wait { margin: 14px 0 0; font-size: 12.5px; color: #8b93a3; }
+
+/* Strip run berjalan: satu baris status di bawah judul, membawa link ke halaman kontrol. */
+.gnb-runstrip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  border: 1px solid rgba(46,196,120,.35);
+  border-radius: 10px;
+  background: rgba(46,196,120,.1);
+  font-size: 13.5px;
+}
+.gnb-runstrip a { color: #57d99a; font-weight: 600; }
+.gnb-dot-on {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #2ec478;
+  flex: none;
+}
+
+/* Kolom pilih: checkbox di header dan tiap baris. */
+.gnb-sel { width: 36px; text-align: center; }
+.gnb-sel input { width: 16px; height: 16px; accent-color: #494fdf; cursor: pointer; }
+
+/* Dua tombol kanan hero (Ekspor CSV + Muat ulang). */
+.gnb-actions { display: flex; gap: 8px; }
+
+/* Toolbar: pencarian + chip filter verdict dalam satu baris, melipat di layar kecil. */
+.gnb-toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.gnb-toolbar .inp { flex: 1; min-width: 220px; }
+.gnb-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.gnb-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 7px 13px;
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, .12);
+  background: rgba(255, 255, 255, .04);
+  color: #c9cfdb;
+  cursor: pointer;
+}
+.gnb-chip:hover { border-color: rgba(255, 255, 255, .3); }
+.gnb-chip.on { border-color: #494fdf; background: rgba(73, 79, 223, .16); color: #e8eaee; }
+.gnb-chipdot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+
+/* Baris aksi massal di bawah toolbar, hanya saat ada pilihan. */
+.gnb-selbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  border: 1px solid rgba(235, 87, 87, .35);
+  background: rgba(235, 87, 87, .08);
+  border-radius: 10px;
+  font-size: 13.5px;
+}
+
+/* Kolom aksi per baris: Ke stok (bila verdict sukses) + Hapus. */
+.gnb-act { white-space: nowrap; }
+.gnb-act > * + * { margin-left: 8px; }
+.gnb-act .btn-ghost, .gnb-act .btn-danger-ghost { font-size: 12.5px; padding: 5px 10px; }
+.gnb-done { font-size: 12.5px; color: #8b93a3; white-space: nowrap; }
+
+@media (max-width: 720px) {
+  .gnb-pw { font-size: 12px; }
+  /* R-03: target sentuh minimum 44px di layar sentuh. */
+  .gnb-chip, .gnb-actions .btn-ghost { min-height: 44px; }
+}

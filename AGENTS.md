@@ -21,6 +21,23 @@ If the mode is unresolved, ask during/after and end the response; wait for the a
 To update antislop later: `npx antislop-ai --update`, or run `npx antislop-ai` and pick Overwrite them.
 <!-- antislop:end -->
 
+## Skill pihak ketiga: impeccable + ECC
+
+Selain antislop, ada dua set skill terpasang di `.agents/skills/`.
+
+**impeccable** — arah desain untuk kerja UI/UX: shape, critique, audit, polish, animate, harden, adapt. Baca `.agents/skills/impeccable/SKILL.md` sebelum mengubah tampilan. State dan artefaknya ditulis ke `.impeccable/` di root (sebagian sudah di-gitignore).
+
+**ECC** — 46 skill proses. Yang paling relevan untuk proyek ini:
+
+- Backend/API: `backend-patterns`, `api-design`, `coding-standards`
+- Review & verifikasi: `security-review`, `verification-loop`, `change-impact`, `module-regression`
+- Testing: `tdd-workflow`, `e2e-testing`, `benchmark-methodology`
+- Frontend: `frontend-patterns`
+- Riset & dokumen: `deep-research`, `documentation-lookup`, `docs-governance`
+- Perencanaan: `plan-canvas`, `context-and-decisions`
+
+Beberapa skill ECC (`exa-search`, `fal-ai-media`, `mcp-server-patterns`, `mcp-dependency-review`, `x-api`) butuh MCP server atau layanan yang tidak terpasang di proyek ini — jangan dipakai, biarkan saja.
+
 ## kinetics (micro-interaction library)
 
 For any UI motion work (hover, click, toggle, toast, tabs, modal, input feedback, reveals, loaders), read the skill at `.agents/skills/kinetics/SKILL.md` and pick an effect from `.agents/skills/kinetics/references/catalog.md` (153 spring-physics micro-interactions, per-effect CSS/React code in `references/`). Adapt selectors and colors to the project; keep the spring parameters. Always gate nonessential motion behind `prefers-reduced-motion`.

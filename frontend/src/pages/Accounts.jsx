@@ -12,6 +12,29 @@ const PLAT = { fb: 'Facebook', ig: 'Instagram', tiktok: 'TikTok' };
 
 const ST_LABEL = { active: 'Aktif', inactive: 'Mati', failed: 'Gagal', checkpoint: 'Checkpoint', pending: 'Antre' };
 
+// Pantau job aktivasi sampai tuntas. Dipakai tombol Aktivasi maupun pemulihan saat
+// halaman dibuka, supaya job yang selesai di luar panel tidak tertinggal basi.
+async function pollActivation({ id, name, startedAt, setActStat, reload }) {
+  for (let i = 0; i < 180; i++) {
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    const status = await api(`/api/accounts/${id}/activate-login/status`).catch(() => null);
+    if (!status || status.error) continue;
+    if (Array.isArray(status.log)) {
+      setActStat((s) => (s && s.status === 'running' ? { ...s, log: status.log } : s));
+    }
+    if (status.status !== 'done' && status.status !== 'error') continue;
+    const ended = status.finishedAt ? Date.parse(status.finishedAt) : NaN;
+    setActStat((s) => ({
+      ...(s || {}), id, name, status: status.status, keepOpen: !!status.keepOpen,
+      log: status.log || (s && s.log) || [],
+      elapsedMs: Math.max(0, (Number.isFinite(ended) ? ended : Date.now()) - startedAt),
+    }));
+    await reload();
+    return;
+  }
+  setActStat((s) => (s ? { ...s, status: 'error', log: [...(s.log || []), '✗ Timeout: aktivasi belum selesai dalam 6 menit (browser mungkin masih terbuka)'] } : s));
+}
+
 function Badge({ s }) {
   const cls = /fail|error|checkpoint/.test(s || '') ? 'b-failed'
     : /done|posted|like_ok/.test(s || '') ? 'b-done'
@@ -34,9 +57,9 @@ export default function Accounts() {
   const [statusTab, setStatusTab] = useState('active');
   const [form, setForm] = useState({ name: '', email: '', password: '', platform: 'fb' });
   // 2FA per akun: simpan kunci (paste) + lihat kode hidup (panel = Google Authenticator).
-  // GetQual: tiap 30 detik kode hangus — countdown lokal + refetch dari server.
+  // GetQual: tiap 30 detik kode hangus: countdown lokal + refetch dari server.
   const [totpEdit, setTotpEdit] = useState(null); // { acc, val, saving }
-  const [totpView, setTotpView] = useState(null); // { acc } — modal kode live
+  const [totpView, setTotpView] = useState(null); // { acc } modal kode live
   const [totpData, setTotpData] = useState(null); // { code, expires_in, period } | { error }
   const [totpLeft, setTotpLeft] = useState(0);
   const [proxyEdit, setProxyEdit] = useState(null); // { acc, val }
@@ -45,7 +68,7 @@ export default function Accounts() {
   const [ipLatest, setIpLatest] = useState({});
   const [ipHist, setIpHist] = useState({ acc: null, rows: null }); // rows null = memuat
   const [probeIp, setProbeIp] = useState(null); // { acc } sedang probe manual
-  // Kesehatan gerbang per akun: { [id]: { ok, reasons } } — diambil massal 1 request.
+  // Kesehatan gerbang per akun: { [id]: { ok, reasons } } diambil massal 1 request.
   const [gates, setGates] = useState(null);
   // Putar IP cepat: dialog panduan -> kartu proses -> probe otomatis konfirmasi IP Indonesia.
   const [rotating, setRotating] = useState(null); // { id, name, status, log, startedAt, elapsedMs }
@@ -56,6 +79,55 @@ export default function Accounts() {
     if (Array.isArray(a)) setAccounts(a);
   };
   useEffect(() => { load(); }, []);
+  // Job aktivasi bisa selesai di luar panel (mis. dipicu dari API): ambil status
+  // terbaru saat halaman dibuka agar kartu lama tidak tertinggal.
+  // Penanda browser terbuka bergerak di luar halaman ini (job selesai atau
+  // ditutup dari tempat lain): segarkan berkala tanpa reload dan tanpa render
+  // ulang bila tidak ada perubahan.
+  useEffect(() => {
+    let live = true;
+    const tick = async () => {
+      const map = await api('/api/keep-open').catch(() => null);
+      if (!live || !map || map.error) return;
+      setAccounts((list) => {
+        if (!Array.isArray(list)) return list;
+        let changed = false;
+        const next = list.map((a) => {
+          const open = !!(map[a.id] || map[String(a.id)]);
+          if (!!a.keepOpen === open) return a;
+          changed = true;
+          return { ...a, keepOpen: open };
+        });
+        return changed ? next : list;
+      });
+    };
+    const t = setInterval(tick, 10000);
+    return () => { live = false; clearInterval(t); };
+  }, []);
+
+  useEffect(() => {
+    let live = true;
+    api('/api/activations').then((rows) => {
+      if (!live || !Array.isArray(rows) || !rows.length) return;
+      const last = rows[0];
+      if (!last || !last.accountId) return;
+      const started = Date.parse(last.startedAt) || Date.now();
+      const ended = last.finishedAt ? Date.parse(last.finishedAt) : null;
+      const fresh = last.status === 'running' || (ended && Date.now() - ended < 15 * 60 * 1000);
+      if (!fresh) return;
+      const name = last.name || `akun #${last.accountId}`;
+      setNow(Date.now());
+      setActStat({
+        id: last.accountId, name, status: last.status, keepOpen: !!last.keepOpen,
+        log: last.log || [], startedAt: started,
+        elapsedMs: Math.max(0, (ended || Date.now()) - started),
+      });
+      if (last.status === 'running') {
+        pollActivation({ id: last.accountId, name, startedAt: started, setActStat, reload: load });
+      }
+    }).catch(() => {});
+    return () => { live = false; };
+  }, []);
   const [ipLoaded, setIpLoaded] = useState(false);
   useEffect(() => {
     let live = true;
@@ -148,7 +220,7 @@ export default function Accounts() {
   const act = async (id, fn, label) => {
     const del = /hapus/i.test(label);
     if (!(await confirmDlg({
-      title: label, danger: del, icon: del ? '🗑' : '?',
+      title: label, danger: del,
       message: del ? 'Akun beserta profil browsernya akan dihapus permanen. Lanjutkan?' : 'Aksi ini dijalankan pada akun terpilih. Lanjutkan?',
       okLabel: del ? 'Ya, hapus' : 'Ya, lanjutkan',
     }))) return;
@@ -169,11 +241,25 @@ export default function Accounts() {
     return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
   };
 
+  // Tutup browser yang dibiarkan terbuka setelah login: endpoint mematikan proses
+  // pemegang profil beserta Chromium anaknya.
+  const closeActivationBrowser = async (id) => {
+    const r = await api(`/api/accounts/${id}/activate-login/close-browser`, { method: 'POST' }).catch(() => null);
+    setActStat((s) => (s ? { ...s, keepOpen: false } : s));
+    load();
+    if (!r || r.error) {
+      const msg = r && r.error === 'tidak_ada_browser_terbuka' ? 'Browser aktivasi sudah tidak terbuka.' : (r && r.error) || 'Gagal menutup browser.';
+      await alertDlg(msg, { title: 'Tutup browser', danger: true });
+      return;
+    }
+    toastOk('Browser aktivasi ditutup');
+  };
+
   const activateViaLogin = async (account) => {
     const ok = await confirmDlg({
       title: 'Aktivasi via login',
       message: `Browser akan dibuka dengan profil persisten akun "${account.name}". Selesaikan login di jendela itu, panel akan mendeteksi otomatis.`,
-      okLabel: 'Buka browser', cancelLabel: 'Batal', icon: '▶',
+      okLabel: 'Buka browser', cancelLabel: 'Batal',
     });
     if (!ok) return;
     setBusy(account.id);
@@ -185,17 +271,7 @@ export default function Accounts() {
         setActStat((s) => ({ ...s, status: 'error', elapsedMs: Date.now() - startedAt, log: [...s.log, '✗ ' + (started.error === 'already_running' ? 'Aktivasi sudah berjalan untuk akun ini' : started.error)] }));
         return;
       }
-      for (let i = 0; i < 180; i++) {
-        await new Promise((resolve) => setTimeout(resolve, 2000));
-        const status = await api(`/api/accounts/${account.id}/activate-login/status`);
-        if (status && Array.isArray(status.log)) setActStat((s) => (s && s.status === 'running' ? { ...s, log: status.log } : s));
-        if (status && (status.status === 'done' || status.status === 'error')) {
-          setActStat((s) => ({ ...s, status: status.status, elapsedMs: Date.now() - startedAt, log: status.log || s.log }));
-          await load();
-          return;
-        }
-      }
-      setActStat((s) => ({ ...s, status: 'error', elapsedMs: Date.now() - startedAt, log: [...s.log, '✗ Timeout: aktivasi belum selesai dalam 6 menit (browser mungkin masih terbuka)'] }));
+      await pollActivation({ id: account.id, name: account.name, startedAt, setActStat, reload: load });
     } finally { setBusy(null); }
   };
 
@@ -235,14 +311,14 @@ export default function Accounts() {
   const saveTotp = async (e) => {
     e.preventDefault();
     const v = (totpEdit.val || '').trim();
-    if (!v) { await alertDlg('Kunci masih kosong — paste teks kunci dari layar setup 2FA.', { title: 'Kunci kosong', danger: true, icon: '⚠' }); return; }
+    if (!v) { await alertDlg('Kunci masih kosong, paste teks kunci dari layar setup 2FA.', { title: 'Kunci kosong', danger: true }); return; }
     setTotpEdit((s) => ({ ...s, saving: true }));
     try {
       const res = await api(`/api/accounts/${totpEdit.acc.id}/totp`, { method: 'POST', body: JSON.stringify({ totpSecret: v }) });
       if (res.error || res.kunci) {
-        await alertDlg(res.kunci || res.error || 'Gagal menyimpan kunci', { title: 'Kunci ditolak', danger: true, icon: '✗' });
+        await alertDlg(res.kunci || res.error || 'Gagal menyimpan kunci', { title: 'Kunci ditolak', danger: true });
       } else {
-        toastOk(`Kunci 2FA ${totpEdit.acc.name} tersimpan — login berikutnya yang kena 2FA dijawab otomatis`);
+        toastOk(`Kunci 2FA ${totpEdit.acc.name} tersimpan, login berikutnya yang kena 2FA dijawab otomatis`);
         setTotpEdit(null); load();
       }
     } finally { setTotpEdit((s) => (s ? { ...s, saving: false } : s)); }
@@ -273,7 +349,7 @@ export default function Accounts() {
   const copyCode = async () => {
     if (!totpData || !totpData.code) return;
     try { await navigator.clipboard.writeText(totpData.code); toastOk('Kode disalin'); }
-    catch (e) { toastErr('Gagal menyalin — salin manual'); }
+    catch { toastErr('Gagal menyalin, salin manual'); }
   };
 
   // Simpan proxy akun (format host:port:user:pass). DataImpulse otomatis dapat
@@ -282,7 +358,7 @@ export default function Accounts() {
     e.preventDefault();
     const v = (proxyEdit.val || '').trim();
     if (v && !/^[^:\s]+:\d+:[^:\s]+:.+$/.test(v)) {
-      await alertDlg('Format proxy: host:port:user:pass. Contoh gw.dataimpulse.com:823:KEY:SECRET', { title: 'Format salah', danger: true, icon: '⚠' });
+      await alertDlg('Format proxy: host:port:user:pass. Contoh gw.dataimpulse.com:823:KEY:SECRET', { title: 'Format salah', danger: true });
       return;
     }
     setSavingProxy(true);
@@ -403,7 +479,7 @@ export default function Accounts() {
           <tbody>
             {rows.map((a) => (
               <tr key={a.id} className={a.status === 'active' ? '' : 'row-dead'}>
-                <td>
+                <td className="acc-account-cell">
                   <div className="acc-cell">
                     <span className="acc-avatar" style={{ background: a.status === 'active' ? (AV[a.platform] || AV.fb) : '#3a3f47' }}>
                       {(a.name || '?')[0].toUpperCase()}
@@ -411,9 +487,10 @@ export default function Accounts() {
                     <span><span className="acc-name">{a.name}</span><div className="acc-email">{a.email}</div></span>
                   </div>
                 </td>
-                {platform === 'all' && <td><span className={`badge b-${a.platform}`}>{PLAT[a.platform] || a.platform}</span></td>}
-                <td><Badge s={a.status} /></td>
-                <td>
+                {platform === 'all' && <td className="acc-platform-cell"><span className="acc-mobile-label">Platform</span><span className={`badge b-${a.platform}`}>{PLAT[a.platform] || a.platform}</span></td>}
+                <td className="acc-status-cell"><span className="acc-mobile-label">Status</span><Badge s={a.status} /></td>
+                <td className="acc-health-cell">
+                  <span className="acc-mobile-label">Kesehatan</span>
                   {(() => {
                     const g = gateStat(a.id);
                     if (!g) return <span className="muted">…</span>;
@@ -426,30 +503,36 @@ export default function Accounts() {
                     );
                   })()}
                 </td>
-                <td>
+                <td className="acc-proxy-cell">
+                  <span className="acc-mobile-label">Proxy / Session</span>
                   <button
                     className={`pill ${a.proxy ? 'p-done' : 'p-wait'}`}
                     title={a.proxy ? `${a.proxy}\nKlik untuk edit. DataImpulse otomatis sticky per akun` : 'Klik untuk isi proxy (host:port:user:pass)'}
                     onClick={() => setProxyEdit({ acc: a, val: a.proxy || '' })}
                   >
-                    {a.proxy ? `🔗 ${String(a.proxy).split(':')[0]}` : '＋ Proxy'}
+                    {a.proxy ? String(a.proxy).split(':')[0] : '+ Proxy'}
                   </button>
                   {a.platform === 'ig' && (
                     <button
                       className={`pill ${a.has_totp ? 'p-done' : 'p-wait'}`}
-                      title={a.has_totp ? 'Kunci 2FA tersimpan — klik untuk lihat kode live (panel yang menghitung)' : 'Klik untuk paste kunci 2FA (dari layar setup autentikator)'}
+                      title={a.has_totp ? 'Kunci 2FA tersimpan, klik untuk lihat kode live (panel yang menghitung)' : 'Klik untuk paste kunci 2FA (dari layar setup autentikator)'}
                       onClick={() => (a.has_totp ? openTotpView(a) : setTotpEdit({ acc: a, val: '', saving: false }))}
                     >
-                      {a.has_totp ? '🔐 2FA' : '＋ 2FA'}
+                      {a.has_totp ? '2FA Aktif' : '+ 2FA'}
                     </button>
                   )}
+                  {a.keepOpen && (
+                    <span className="pill p-live" title="Browser aktivasi akun ini masih terbuka. Tutup dari kartu status aktivasi.">
+                      Browser terbuka
+                    </span>
+                  )}
                 </td>
-                <td>
+                <td className="acc-ip-cell">
+                  <span className="acc-mobile-label">IP Terakhir</span>
                   {(() => {
                     const li = ipLatest[a.id] || ipLatest[String(a.id)];
-                    if (!li) return <span className="muted">–</span>;
+                    if (!li) return <span className="muted">-</span>;
                     const ccU = (li.country_code || '').toUpperCase();
-                    const flag = ccU.replace(/./g, (c) => String.fromCodePoint(127397 + c.charCodeAt()));
                     const warn = ccU && ccU !== 'ID';
                     return (
                       <button
@@ -458,13 +541,14 @@ export default function Accounts() {
                         onClick={() => openIpHist(a)}
                       >
                         <span className="ip-mono">{li.ip}</span>
-                        <span className="ip-loc">{flag} {li.city || li.country || '?'}{flag ? '' : ' · riwayat'}</span>
+                        <span className="ip-loc">{ccU ? `[${ccU}] ` : ''}{li.city || li.country || '?'}</span>
                       </button>
                    );
                   })()}
                 </td>
                 <td className="muted col-hide-sm">{a.last_login ? new Date(a.last_login).toLocaleString('id-ID') : '–'}</td>
-                <td>
+                <td className="acc-actions-cell">
+                  <span className="acc-mobile-label">Aksi</span>
                   <div className="act-col">
                     <div>
                       {a.status === 'active'
@@ -511,6 +595,9 @@ export default function Accounts() {
           : actStat.status === 'done' ? `Sesi tersimpan di profil persisten · ${fmtDur(actStat.elapsedMs)}`
           : `Gagal setelah ${fmtDur(actStat.elapsedMs)}: cek log server / coba lagi`,
         () => setActStat(null),
+        actStat.status === 'done' && actStat.keepOpen && (
+          <button type="button" className="btn-ghost" onClick={() => closeActivationBrowser(actStat.id)}>Tutup browser</button>
+        ),
       )}
       {rotating && floatPanel(
         rotating,
@@ -576,9 +663,9 @@ export default function Accounts() {
           <form className="modal" role="dialog" aria-modal="true" aria-label="Kunci 2FA akun" onClick={(e) => e.stopPropagation()} onSubmit={saveTotp}>
             <h3>Kunci 2FA: {totpEdit.acc.name}</h3>
             <p className="modal-hint">
-              Paste <b>teks kunci</b> dari layar setup 2FA IG (pendek "Salin kuncinya"), contoh
+              Paste <b>teks kunci</b> dari layar setup 2FA IG (menu "Salin kuncinya"), contoh
               bentuknya <code>GPT7 DQ5H EBCA 2EWL</code>. Kunci disimpan terenkripsi; kode 6 digit
-              dihitung panel sendiri — login berikutnya yang kena 2FA dijawab otomatis tanpa HP.
+              dihitung panel sendiri, sehingga login berikutnya yang kena 2FA dijawab otomatis tanpa HP.
             </p>
             <label>Kunci autentikator
               <input
@@ -603,12 +690,12 @@ export default function Accounts() {
           <div className="modal" role="dialog" aria-modal="true" aria-label={`Kode 2FA ${totpView.acc.name}`} onClick={(e) => e.stopPropagation()}>
             <h3>Kode 2FA: {totpView.acc.name}</h3>
             {!totpData && <p className="modal-hint">Menghitung kode...</p>}
-            {totpData && totpData.error && <p className="modal-hint">{totpData.error === 'tanpa_totp' ? 'Kunci belum tersimpan.' : totpData.error === 'totp_locked' ? '2FA dipegang pihak lain — bot tidak boleh menghitung.' : totpData.error === 'secret_rusak' ? 'Kunci tersimpan tidak bisa dibaca.' : 'Gagal menghitung kode.'}</p>}
+            {totpData && totpData.error && <p className="modal-hint">{totpData.error === 'tanpa_totp' ? 'Kunci belum tersimpan.' : totpData.error === 'totp_locked' ? '2FA dipegang pihak lain, bot tidak boleh menghitung.' : totpData.error === 'secret_rusak' ? 'Kunci tersimpan tidak bisa dibaca.' : 'Gagal menghitung kode.'}</p>}
             {totpData && !totpData.error && (
               <>
                 <div className="g2fa-code" aria-live="polite">{totpData.code}</div>
                 <div className="g2fa-bar"><span style={{ width: `${Math.max(0, (totpLeft / (totpData.period || 30)) * 100)}%` }} /></div>
-                <p className="modal-hint">Kode baru dalam {totpLeft} detik. Panel yang menghitung — HP/Authenticator tidak diperlukan.</p>
+                <p className="modal-hint">Kode baru dalam {totpLeft} detik. Panel yang menghitung, HP/Authenticator tidak diperlukan.</p>
               </>
             )}
             <div className="modal-btns">
@@ -631,11 +718,11 @@ export default function Accounts() {
               {ipHist.rows === null && <div className="muted iph-empty">Memuat…</div>}
               {ipHist.rows && ipHist.rows.length === 0 && <div className="muted iph-empty">Belum ada catatan. Buka browser akun, jalankan aktivasi, atau klik “Probe IP sekarang”.</div>}
               {ipHist.rows && ipHist.rows.map((r) => {
-                const flag = (r.country_code || '').toUpperCase().replace(/./g, (c) => String.fromCodePoint(127397 + c.charCodeAt()));
+                const ccU = (r.country_code || '').toUpperCase();
                 return (
                   <div key={r.id} className={`iph-row ${r.ok ? '' : 'iph-bad'}`}>
                     <span className="ip-mono">{r.ok ? r.ip : 'gagal'}</span>
-                    <span className="iph-loc">{r.ok ? `${flag} ${[r.city, r.country].filter(Boolean).join(', ') || '?'}${r.asn ? ` · AS${r.asn}` : ''}` : (r.error || 'error')}</span>
+                    <span className="iph-loc">{r.ok ? `${ccU ? `[${ccU}] ` : ''}${[r.city, r.country].filter(Boolean).join(', ') || '?'}${r.asn ? ` · AS${r.asn}` : ''}` : (r.error || 'error')}</span>
                     <span className="iph-src">{r.source}</span>
                     <span className="iph-time">{String(r.created_at || '').replace('T', ' ').slice(0, 16)}</span>
                   </div>

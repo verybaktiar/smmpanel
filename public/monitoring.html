@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SMM Panel - Enhanced Monitoring Dashboard</title>
+  <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      padding: 20px;
+    }
+    .container { max-width: 1400px; margin: 0 auto; }
+    h1 { margin-bottom: 30px; color: #fff; font-size: 28px; }
+    
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 20px;
+      margin-bottom: 30px;
+    }
+    
+    .stat-card {
+      background: #1e293b;
+      padding: 20px;
+      border-radius: 12px;
+      border: 1px solid #334155;
+      transition: all 0.3s;
+    }
+    
+    .stat-card:hover {
+      border-color: #3b82f6;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
+    }
+    
+    .stat-label {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #94a3b8;
+      margin-bottom: 8px;
+    }
+    
+    .stat-value {
+      font-size: 32px;
+      font-weight: bold;
+      color: #fff;
+    }
+    
+    .stat-change {
+      font-size: 14px;
+      margin-top: 8px;
+    }
+    
+    .positive { color: #10b981; }
+    .negative { color: #ef4444; }
+    .neutral { color: #6b7280; }
+    
+    .section {
+      background: #1e293b;
+      padding: 25px;
+      border-radius: 12px;
+      border: 1px solid #334155;
+      margin-bottom: 20px;
+    }
+    
+    .section-title {
+      font-size: 18px;
+      margin-bottom: 20px;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    
+    .status-online { background: #10b981; animation: pulse 2s infinite; }
+    .status-offline { background: #ef4444; }
+    
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    
+    .btn {
+      background: #3b82f6;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.3s;
+      margin-right: 10px;
+    }
+    
+    .btn:hover {
+      background: #2563eb;
+      transform: translateY(-1px);
+    }
+    
+    .btn-secondary {
+      background: #475569;
+    }
+    
+    .btn-secondary:hover {
+      background: #334155;
+    }
+    
+    .notification {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      padding: 15px 20px;
+      max-width: 350px;
+      animation: slideIn 0.3s;
+      z-index: 1000;
+    }
+    
+    @keyframes slideIn {
+      from { transform: translateX(400px); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+    
+    .notification.success { border-left: 4px solid #10b981; }
+    .notification.error { border-left: 4px solid #ef4444; }
+    .notification.info { border-left: 4px solid #3b82f6; }
+    .notification.warning { border-left: 4px solid #f59e0b; }
+    
+    .log-entry {
+      padding: 8px 12px;
+      margin-bottom: 8px;
+      background: #0f172a;
+      border-radius: 6px;
+      border-left: 3px solid #475569;
+      font-size: 13px;
+      font-family: 'Courier New', monospace;
+    }
+    
+    .log-entry.success { border-left-color: #10b981; }
+    .log-entry.error { border-left-color: #ef4444; }
+    .log-entry.info { border-left-color: #3b82f6; }
+    
+    .log-time {
+      color: #64748b;
+      margin-right: 10px;
+    }
+    
+    .progress-bar {
+      width: 100%;
+      height: 8px;
+      background: #0f172a;
+      border-radius: 4px;
+      overflow: hidden;
+      margin-top: 10px;
+    }
+    
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #3b82f6, #10b981);
+      transition: width 0.3s;
+    }
+    
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+    
+    @media (max-width: 768px) {
+      .grid-2 { grid-template-columns: 1fr; }
+    }
+    
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    
+    th, td {
+      padding: 12px;
+      text-align: left;
+      border-bottom: 1px solid #334155;
+    }
+    
+    th {
+      background: #0f172a;
+      font-weight: 600;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #94a3b8;
+    }
+    
+    tr:hover {
+      background: #0f172a;
+    }
+    
+    .badge {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    
+    .badge-success { background: #10b98120; color: #10b981; }
+    .badge-error { background: #ef444420; color: #ef4444; }
+    .badge-warning { background: #f59e0b20; color: #f59e0b; }
+    .badge-info { background: #3b82f620; color: #3b82f6; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🚀 SMM Panel - Enhanced Monitoring Dashboard</h1>
+    
+    <!-- System Stats -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">Server Status</div>
+        <div class="stat-value">
+          <span class="status-dot" id="serverStatus"></span>
+          <span id="serverText">Checking...</span>
+        </div>
+        <div class="stat-change neutral" id="uptime">Uptime: --</div>
+      </div>
+      
+      <div class="stat-card">
+        <div class="stat-label">Queue Stats</div>
+        <div class="stat-value" id="queueProcessed">0</div>
+        <div class="stat-change">
+          <span class="positive" id="queueSuccess">0 success</span> / 
+          <span class="negative" id="queueFailed">0 failed</span>
+        </div>
+      </div>
+      
+      <div class="stat-card">
+        <div class="stat-label">Running Orders</div>
+        <div class="stat-value" id="runningOrders">0</div>
+        <div class="stat-change neutral" id="scheduledOrders">0 scheduled</div>
+      </div>
+      
+      <div class="stat-card">
+        <div class="stat-label">WebSocket Clients</div>
+        <div class="stat-value" id="wsClients">0</div>
+        <div class="stat-change" id="wsStatus">
+          <span class="status-dot status-offline"></span> Disconnected
+        </div>
+      </div>
+    </div>
+    
+    <!-- Actions -->
+    <div class="section">
+      <div class="section-title">🎮 Quick Actions</div>
+      <button class="btn" onclick="processAllOrders()">Process All Orders</button>
+      <button class="btn" onclick="checkAllAccounts()">Health Check All Accounts</button>
+      <button class="btn" onclick="validateProxies()">Validate Proxies</button>
+      <button class="btn btn-secondary" onclick="resetQueueStats()">Reset Queue Stats</button>
+      <button class="btn btn-secondary" onclick="refreshData()">Refresh Data</button>
+    </div>
+    
+    <!-- Real-time Logs -->
+    <div class="grid-2">
+      <div class="section">
+        <div class="section-title">📊 Real-time Activity Log</div>
+        <div id="activityLog" style="max-height: 400px; overflow-y: auto;">
+          <div class="log-entry info">
+            <span class="log-time">--:--:--</span>
+            Waiting for events...
+          </div>
+        </div>
+      </div>
+      
+      <div class="section">
+        <div class="section-title">🔔 Notifications</div>
+        <div id="notificationLog" style="max-height: 400px; overflow-y: auto;">
+          <div class="log-entry info">
+            <span class="log-time">--:--:--</span>
+            Monitoring started
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Recent Orders -->
+    <div class="section">
+      <div class="section-title">📦 Recent Orders</div>
+      <table id="ordersTable">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Post URL</th>
+            <th>Platform</th>
+            <th>Progress</th>
+            <th>Status</th>
+            <th>Created</th>
+          </tr>
+        </thead>
+        <tbody id="ordersBody">
+          <tr><td colspan="6" style="text-align: center; padding: 20px;">Loading...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  
+  <script>
+    // WebSocket Connection
+    const socket = io();
+    let isConnected = false;
+    
+    socket.on('connect', () => {
+      isConnected = true;
+      updateWSStatus(true);
+      addLog('WebSocket connected', 'success');
+    });
+    
+    socket.on('disconnect', () => {
+      isConnected = false;
+      updateWSStatus(false);
+      addLog('WebSocket disconnected', 'error');
+    });
+    
+    socket.on('order:progress', (data) => {
+      addLog(`Order ${data.orderId} progress update`, 'info');
+      refreshOrders();
+    });
+    
+    socket.on('execution:update', (data) => {
+      addLog(`Execution ${data.executionId} updated: ${data.status || 'processing'}`, 'info');
+    });
+    
+    socket.on('account:health', (data) => {
+      const status = data.healthy ? 'healthy' : 'unhealthy';
+      addLog(`Account ${data.accountName} health check: ${status}`, data.healthy ? 'success' : 'error');
+    });
+    
+    socket.on('queue:stats', (data) => {
+      updateQueueStats(data);
+    });
+    
+    socket.on('notification', (data) => {
+      addNotification(data.message, data.type || 'info');
+      showToast(data.message, data.type || 'info');
+    });
+    
+    // Update functions
+    function updateWSStatus(connected) {
+      const statusEl = document.querySelector('#wsStatus .status-dot');
+      const textEl = document.querySelector('#wsStatus');
+      const clientsEl = document.getElementById('wsClients');
+      
+      if (connected) {
+        statusEl.className = 'status-dot status-online';
+        textEl.innerHTML = '<span class="status-dot status-online"></span> Connected';
+      } else {
+        statusEl.className = 'status-dot status-offline';
+        textEl.innerHTML = '<span class="status-dot status-offline"></span> Disconnected';
+        clientsEl.textContent = '0';
+      }
+    }
+    
+    function updateQueueStats(stats) {
+      document.getElementById('queueProcessed').textContent = stats.processed || 0;
+      document.getElementById('queueSuccess').textContent = `${stats.processed || 0} success`;
+      document.getElementById('queueFailed').textContent = `${stats.failed || 0} failed`;
+    }
+    
+    function addLog(message, type = 'info') {
+      const log = document.getElementById('activityLog');
+      const entry = document.createElement('div');
+      entry.className = `log-entry ${type}`;
+      const time = new Date().toLocaleTimeString('id-ID');
+      entry.innerHTML = `<span class="log-time">${time}</span>${message}`;
+      log.insertBefore(entry, log.firstChild);
+      
+      // Keep only last 50 entries
+      while (log.children.length > 50) {
+        log.removeChild(log.lastChild);
+      }
+    }
+    
+    function addNotification(message, type = 'info') {
+      const log = document.getElementById('notificationLog');
+      const entry = document.createElement('div');
+      entry.className = `log-entry ${type}`;
+      const time = new Date().toLocaleTimeString('id-ID');
+      entry.innerHTML = `<span class="log-time">${time}</span>${message}`;
+      log.insertBefore(entry, log.firstChild);
+      
+      while (log.children.length > 50) {
+        log.removeChild(log.lastChild);
+      }
+    }
+    
+    function showToast(message, type = 'info') {
+      const toast = document.createElement('div');
+      toast.className = `notification ${type}`;
+      toast.textContent = message;
+      document.body.appendChild(toast);
+      
+      setTimeout(() => {
+        toast.style.animation = 'slideIn 0.3s reverse';
+        setTimeout(() => toast.remove(), 300);
+      }, 3000);
+    }
+    
+    // API Functions
+    async function refreshData() {
+      try {
+        // System status
+        const systemRes = await fetch('/api/system/status');
+        const system = await systemRes.json();
+        
+        document.getElementById('serverStatus').className = 'status-dot status-online';
+        document.getElementById('serverText').textContent = 'Online';
+        document.getElementById('uptime').textContent = `Uptime: ${Math.floor(system.uptime / 60)}m`;
+        document.getElementById('runningOrders').textContent = system.orders?.running || 0;
+        document.getElementById('scheduledOrders').textContent = `${system.orders?.scheduled || 0} scheduled`;
+        document.getElementById('wsClients').textContent = system.websocket?.connected || 0;
+        
+        // Queue stats
+        const queueRes = await fetch('/api/queue/stats');
+        const queue = await queueRes.json();
+        updateQueueStats(queue);
+        
+        // Orders
+        await refreshOrders();
+        
+        addLog('Data refreshed', 'success');
+      } catch (error) {
+        document.getElementById('serverStatus').className = 'status-dot status-offline';
+        document.getElementById('serverText').textContent = 'Offline';
+        addLog(`Error: ${error.message}`, 'error');
+      }
+    }
+    
+    async function refreshOrders() {
+      try {
+        const res = await fetch('/api/smm/like-orders');
+        const orders = await res.json();
+        
+        const tbody = document.getElementById('ordersBody');
+        tbody.innerHTML = '';
+        
+        if (orders.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 20px;">No orders yet</td></tr>';
+          return;
+        }
+        
+        orders.slice(0, 10).forEach(order => {
+          const row = document.createElement('tr');
+          const progress = Math.round((order.completed_likes / order.target_likes) * 100) || 0;
+          const statusClass = {
+            pending: 'info',
+            running: 'warning',
+            completed: 'success',
+            failed: 'error',
+            paused: 'warning',
+            cancelled: 'error',
+            scheduled: 'info'
+          }[order.status] || 'info';
+          
+          row.innerHTML = `
+            <td>#${order.id}</td>
+            <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis;">${order.post_url}</td>
+            <td>${order.platform.toUpperCase()}</td>
+            <td>
+              <div>${order.completed_likes}/${order.target_likes}</div>
+              <div class="progress-bar">
+                <div class="progress-fill" style="width: ${progress}%"></div>
+              </div>
+            </td>
+            <td><span class="badge badge-${statusClass}">${order.status}</span></td>
+            <td>${new Date(order.created_at).toLocaleString('id-ID')}</td>
+          `;
+          tbody.appendChild(row);
+        });
+      } catch (error) {
+        addLog(`Error loading orders: ${error.message}`, 'error');
+      }
+    }
+    
+    async function processAllOrders() {
+      try {
+        addLog('Processing all orders...', 'info');
+        const res = await fetch('/api/queue/process-all', { method: 'POST' });
+        const result = await res.json();
+        addLog(`Processed ${result.executionsProcessed || 0} executions`, 'success');
+        showToast('Orders processing started', 'success');
+      } catch (error) {
+        addLog(`Error: ${error.message}`, 'error');
+        showToast('Failed to process orders', 'error');
+      }
+    }
+    
+    async function checkAllAccounts() {
+      try {
+        addLog('Checking all accounts health...', 'info');
+        showToast('Health check started (this may take a while)', 'info');
+        const res = await fetch('/api/health/accounts');
+        const result = await res.json();
+        addLog(`Health check complete: ${result.summary.healthy}/${result.summary.total} healthy`, 'success');
+        showToast(`${result.summary.healthy}/${result.summary.total} accounts healthy`, 'success');
+      } catch (error) {
+        addLog(`Error: ${error.message}`, 'error');
+        showToast('Health check failed', 'error');
+      }
+    }
+    
+    async function validateProxies() {
+      try {
+        addLog('Validating all proxies...', 'info');
+        showToast('Proxy validation started', 'info');
+        const res = await fetch('/api/proxy/validate-all');
+        const result = await res.json();
+        addLog(`Proxy validation: ${result.valid}/${result.total} valid`, 'success');
+        showToast(`${result.valid}/${result.total} proxies valid`, result.valid === result.total ? 'success' : 'warning');
+      } catch (error) {
+        addLog(`Error: ${error.message}`, 'error');
+        showToast('Proxy validation failed', 'error');
+      }
+    }
+    
+    async function resetQueueStats() {
+      try {
+        await fetch('/api/queue/reset-stats', { method: 'POST' });
+        addLog('Queue stats reset', 'success');
+        showToast('Queue stats reset', 'success');
+        refreshData();
+      } catch (error) {
+        addLog(`Error: ${error.message}`, 'error');
+      }
+    }
+    
+    // Initialize
+    refreshData();
+    setInterval(refreshData, 30000); // Refresh every 30 seconds
+  </script>
+</body>
+</html>

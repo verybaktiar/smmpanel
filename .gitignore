@@ -27,3 +27,42 @@ th-chat-allfree-result.json
 th-models.json
 th-r9-stability.json
 th-stability.json
+# Konfigurasi AI dari UI (berisi API key)
+config/ai.json
+# Artefak audit lokal, cadangan data, dan kode akun: tidak untuk repo
+.tmp-logs/
+.tmp-acc.json
+*-code.txt
+temp_section.txt
+database.backup*.db
+audit-*.png
+tt-*.png
+ig-relogin-profile.png
+tiktok-*.png
+# impeccable-ignore-start
+# Output sementara, state runtime, dan override per-developer.
+# Artefak bersama (config.json, design.json, surfaces/*.md, critique/*.md) tetap di-track.
+**/.impeccable/config.local.json
+**/.impeccable/hook.cache.json
+**/.impeccable/hook.pending.json
+**/.impeccable/*.png
+**/.impeccable/review/
+**/.impeccable/questions/
+**/.impeccable/live/server.json
+**/.impeccable/live/sessions/
+**/.impeccable/live/previews/
+**/.impeccable/live/annotations/
+**/.impeccable/live/cache/
+**/.impeccable/live/manual-edit-apply-transaction.json
+**/.impeccable/live/manual-edit-events.jsonl
+**/.impeccable/live/manual-edit-evidence/
+**/.impeccable/live/pending-manual-edits.json
+**/.impeccable/live/deferred-svelte-component-accepts.json
+**/.impeccable/live/*.png
+# impeccable-ignore-end
+
+# Runtime & state job (berisi data akun hasil create)
+farm-jobs/
+tmp/
+server.pid
+tools/superagent/

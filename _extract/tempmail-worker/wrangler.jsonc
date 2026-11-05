@@ -1,0 +1,28 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "tempmail",
+  "main": "src/index.js",
+  "compatibility_date": "2026-04-10",
+  "workers_dev": true,
+  "compatibility_flags": ["nodejs_compat"],
+  "triggers": {
+    "crons": ["0 */6 * * *"]
+  },
+  "vars": {
+    "MAIL_DOMAIN": "yourdomain.com",
+    "MAIL_DOMAINS": "yourdomain.com",
+    "PUBLIC_BASE_URL": "",
+    "ADMIN_IDS": "",
+    "ADMIN_CONTACT": "",
+    "INBOX_TTL_HOURS": "24",
+    "MAX_BODY_CHARS": "100000",
+    "AUTO_DELETE_EXPIRED": "true"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "tempmail",
+      "database_id": "YOUR_D1_DATABASE_ID"
+    }
+  ]
+}

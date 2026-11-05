@@ -10,13 +10,29 @@ const PLATFORMS = [
   { id: 'tiktok', name: 'TikTok', icon: '♪', cls: 'tt' },
 ];
 
+// Angka hanya beranimasi sekali saat halaman dibuka. Polling 30 dtk tidak boleh
+// membuat angka bergerak lagi tepat saat sedang dibaca.
 function useCountUp(target, dur = 900) {
   const [v, setV] = useState(0);
+  const current = useRef(0);
+  const animated = useRef(false);
   useEffect(() => {
-    let raf; const t0 = performance.now();
+    const end = Number(target) || 0;
+    const start = current.current;
+    const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    if (animated.current || reduceMotion || start === end) {
+      current.current = end;
+      setV(end);
+      return undefined;
+    }
+    animated.current = true;
+    let raf;
+    const t0 = performance.now();
     const step = (t) => {
       const p = Math.min(1, (t - t0) / dur);
-      setV(Math.round((Number(target) || 0) * (1 - Math.pow(1 - p, 3))));
+      const next = Math.round(start + (end - start) * (1 - Math.pow(1 - p, 3)));
+      current.current = next;
+      setV(next);
       if (p < 1) raf = requestAnimationFrame(step);
     };
     raf = requestAnimationFrame(step);
@@ -74,6 +90,7 @@ export default function Dashboard() {
   const [freshIds, setFreshIds] = useState([]);
   const [updatedAt, setUpdatedAt] = useState(null);
   const seenIds = useRef(new Set());
+  const dashboardRef = useRef(null);
   const [, setTick] = useState(0);
   const timer = useRef(null);
 
@@ -151,6 +168,29 @@ export default function Dashboard() {
     return () => { clearInterval(timer.current); clearInterval(fast); clearInterval(tick); };
   }, [fetchAll, fetchFast]);
 
+  useEffect(() => {
+    const root = dashboardRef.current;
+    if (!root) return undefined;
+    const items = root.querySelectorAll('.dash-reveal');
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches || !('IntersectionObserver' in window)) {
+      items.forEach((item) => item.classList.add('is-visible'));
+      return undefined;
+    }
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        entry.target.classList.add('is-visible');
+        observer.unobserve(entry.target);
+      });
+    }, { threshold: 0.08, rootMargin: '0px 0px -24px 0px' });
+    items.forEach((item) => observer.observe(item));
+    root.classList.add('dash-motion-ready');
+    return () => {
+      observer.disconnect();
+      root.classList.remove('dash-motion-ready');
+    };
+  }, []);
+
   const active = accounts.filter((a) => a.status === 'active').length;
   const by = (p) => accounts.filter((a) => a.platform === p);
   const workerList = workers && workers.workers ? workers.workers : [];
@@ -166,15 +206,41 @@ export default function Dashboard() {
   const cAccounts = useCountUp(accounts.length);
   const cActive = useCountUp(active);
   const cToday = useCountUp(stats?.schedulesToday ?? 0);
-  const cErr = useCountUp(stats?.logErrors ?? 0);
+  // D10: kartu ini memakai jendela 24 jam agar sebanding dengan "Jadwal Hari Ini";
+  // angka sepanjang waktu tetap tersedia lewat tooltip.
+  const cErr = useCountUp(stats?.logErrors24h ?? 0);
+  const errTotal = Number(stats?.logErrors) || 0;
+  const workerBadge = workerState === 'unknown'
+    ? ['b-pending', 'memeriksa']
+    : workerState === 'fail'
+      ? ['b-failed', 'gagal dihubungi']
+      : workerList.length === 0
+        ? ['b-inactive', 'belum pernah jalan']
+        : workerHealthy > 0
+          ? ['b-done', workerSummary]
+          : ['b-failed', 'mati > 24 jam'];
+  // Satu kalimat status menggantikan tiga angka yang mengulang kartu di bawahnya.
+  const workerDead = workerState === 'ok' && workerList.length > 0 && seen24.length === 0;
+  const alerts = [
+    cErr > 0 ? `${cErr} error 24 jam` : '',
+    farmFail ? 'farm gagal dihubungi' : '',
+    workerDead ? 'worker tanpa heartbeat 24 jam' : '',
+  ].filter(Boolean);
+  const verdict = apiOk === null
+    ? { tone: 'idle', text: 'Menyambungkan ke server...' }
+    : apiOk === false
+      ? { tone: 'bad', text: 'Dashboard API gagal dihubungi. Data di bawah mungkin sudah usang.' }
+      : alerts.length
+        ? { tone: 'warn', text: `Perlu perhatian: ${alerts.join(' · ')}` }
+        : { tone: 'ok', text: 'Sistem berjalan normal, tidak ada error dalam 24 jam terakhir.' };
 
   return (
-    <div className="dash">
-      <header className="dash-hero hero-top">
+    <div className="dash" ref={dashboardRef}>
+      <header className="dash-hero hero-top dash-reveal">
         <div>
           <div className="eyebrow">{new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
           <h1>Ringkasan hari ini</h1>
-          <p className="hero-sum"><span><i className="dot ok" />{active} akun aktif</span><span><i className="dot warn" />{queue.length} antrean</span><span><i className={`dot ${(farm?.length || 0) > 0 ? 'ok' : 'warn'}`} />{farm?.length || 0} HP terhubung</span></p>
+          <p className={`hero-verdict ${verdict.tone}`}><i className="dot" />{verdict.text}</p>
           <div className="quick">
             <Link className="q-fb" to="/posting?platform=fb"><Icon name="pen" size={14} /> Post FB</Link>
             <Link className="q-ig" to="/posting?platform=ig"><Icon name="camera" size={14} /> Post IG</Link>
@@ -189,22 +255,22 @@ export default function Dashboard() {
 
       {loading && accounts.length === 0 && <div className="card loading">Memuat ringkasan...</div>}
 
-      <section className="stat-row">
+      <section className="stat-row dash-reveal" aria-label="Metrik utama">
         <div className="stat"><div className="num">{cAccounts}</div><div className="lbl">Total Akun</div></div>
         <div className="stat stat-hero"><div className="num ok">{cActive}</div><div className="lbl">Akun Aktif</div></div>
         <div className="stat"><div className={`num${cToday > 0 ? ' warn' : ''}`}>{cToday}</div><div className="lbl">Jadwal Hari Ini</div></div>
         {cErr > 0
-          ? <Link className="stat stat-alert stat-link" to="/history?res=bad" title="Buka daftar error di Riwayat"><div className="num bad">{cErr}</div><div className="lbl">Error</div></Link>
-          : <div className="stat"><div className="num bad">{cErr}</div><div className="lbl">Error</div></div>}
+          ? <Link className="stat stat-alert stat-link" to="/history?res=bad" title={`Buka daftar error di Riwayat. Total sepanjang waktu: ${errTotal}`}><div className="num bad">{cErr}</div><div className="lbl">Error 24 jam</div></Link>
+          : <div className="stat" title={`Total error sepanjang waktu: ${errTotal}`}><div className="num">{cErr}</div><div className="lbl">Error 24 jam</div></div>}
       </section>
 
-      <section className="plat-row">
+      <section className="plat-row dash-reveal" aria-label="Ringkasan platform">
         {PLATFORMS.map((p, i) => {
           const list = by(p.id);
           const act = list.filter((a) => a.status === 'active').length;
           const pct = list.length ? Math.round((act / list.length) * 100) : 0;
           return (
-            <Link to={list.length === 0 ? `/create-${p.id}` : (p.id === 'tiktok' ? '/tiktok' : `/akun?platform=${p.id}`)} className={`card plat-${p.cls} plat-card`} key={p.id}
+            <Link to={list.length === 0 ? `/create-${p.id}` : (p.id === 'tiktok' ? '/tiktok' : `/akun?platform=${p.id}`)} className={`card plat-${p.cls} plat-card${list.length === 0 ? ' plat-card-empty' : ''}`} key={p.id}
               style={{ animationDelay: `${i * 90}ms` }}>
               <div className="plat-head"><span className="plat-ic">{p.icon}</span><h3>{p.name}</h3></div>
               {list.length === 0 ? (
@@ -213,7 +279,7 @@ export default function Dashboard() {
                 <>
                   <div className="plat-num">{act}<span>/{list.length}</span></div>
                   <div className="plat-bar"><div style={{ width: pct + '%' }} /></div>
-                  <div className={`plat-sub${act > 0 && pct < 10 ? ' warn' : ''}`}>{pct}% aktif</div>
+                  <div className={`plat-sub${act > 0 && pct < 10 ? ' warn' : ''}`}>{pct}% aktif{list.length - act > 0 ? ` · ${list.length - act} nonaktif` : ''}</div>
                 </>
               )}
             </Link>
@@ -221,7 +287,7 @@ export default function Dashboard() {
         })}
       </section>
 
-      <section className="card trend-card">
+      <section className={`card trend-card dash-reveal${trend && trend.length === 0 ? ' is-flat' : ''}`}>
         <div className="queue-head"><h3>Tren aktif 7 hari</h3><span className="feed-time">akun beraktivitas per hari, dari riwayat</span></div>
         {trend === null ? <div className="loading">Memuat grafik...</div> : (() => {
           // Hari yang tak ber-log tetap digambar kosong; hanya hari nyata angkanya.
@@ -234,16 +300,16 @@ export default function Dashboard() {
           return total === 0 ? (
             <p className="muted">Belum ada akun beraktivitas lewat 7 hari terakhir.</p>
           ) : (
-            <div className="trend">
+            <div className="trend" role="img" aria-label={`Akun beraktivitas per hari, 7 hari terakhir: ${series.map((s) => `${s.lbl} ${s.c}`).join(', ')}`}>
               {series.map((s) => (
-                <div className="trend-day" key={s.key} title={`${s.c} akun beraktivitas`}><span className="trend-num">{s.c || ''}</span><div className="trend-bar" style={{ height: `${Math.round((s.c / max) * 64) + (s.c ? 4 : 2)}px` }} /><span className="trend-lbl">{s.lbl}</span></div>
+                <div className="trend-day" key={s.key} aria-hidden="true" title={`${s.c} akun beraktivitas`}><span className={`trend-num${s.c ? '' : ' zero'}`}>{s.c || 0}</span><div className={`trend-bar${s.c ? '' : ' is-zero'}`} style={{ height: `${Math.round((s.c / max) * 64) + (s.c ? 4 : 2)}px` }} /><span className="trend-lbl">{s.lbl}</span></div>
               ))}
             </div>
           );
         })()}
       </section>
 
-      <section className="dash-grid">
+      <section className="dash-grid dash-reveal">
         <div className="card queue-card">
           <div className="queue-head"><h3>Antrean Hari Ini</h3>{queue.length > 0 && <span className="queue-count">{queue.length} menunggu</span>}</div>
           {queue.length === 0 && orders.length === 0 ? (
@@ -283,19 +349,27 @@ export default function Dashboard() {
         <div className="card">
           <div className="queue-head"><h3>Status Sistem</h3><span className="feed-time">{updatedAt ? 'data ' + ago(new Date(updatedAt).toISOString()).replace(' lalu', '') + ' lalu' : ''}</span></div>
           <ul className="sys2">
-            <li><span className="sys-ic">▦</span><span className="sys-label">Dashboard API</span><span className={`badge ${apiOk === null ? 'b-pending' : apiOk ? 'b-done' : 'b-failed'}`}>{apiOk === null ? 'memeriksa' : apiOk ? 'nyala' : 'gagal dihubungi'}</span></li>
-            <li><span className="sys-ic">◷</span><span className="sys-label">Worker</span><span className={`badge ${workerState === 'unknown' ? 'b-pending' : workerState === 'fail' ? 'b-failed' : workerHealthy > 0 ? 'b-done' : 'b-pending'}`}>{workerState === 'unknown' ? 'memeriksa' : workerState === 'fail' ? 'gagal dihubungi' : workerSummary}</span></li>
-            <li><span className="sys-ic">▣</span><span className="sys-label">Phone Farm</span><span className={`badge ${farmFail ? 'b-failed' : (farm?.length || 0) > 0 ? 'b-done' : 'b-pending'}`}>{farmFail ? 'gagal dihubungi' : farm?.length ? `${farm.length} HP` : '0 HP'}</span></li>
-            <li title={wd?.lastProbeAt ? 'Probe terakhir ' + ago(new Date(wd.lastProbeAt).toISOString()) : 'Probe tiap 10 menit'}><span className="sys-ic">⚑</span><span className="sys-label">Jaga Farm</span><span className={`badge ${wd === null ? 'b-pending' : wd.alarmed ? 'b-failed' : wd.fails > 0 ? 'b-pending' : 'b-done'}`}>{wd === null ? 'memeriksa' : wd.alarmed ? 'alarm terkirim' : wd.fails > 0 ? `gagal ${wd.fails}× (baru)` : 'jaga tiap 10 mnt'}</span></li>
+            <li><span className="sys-ic"><Icon name="bolt" size={15} /></span><span className="sys-label">Dashboard API</span><span className={`badge ${apiOk === null ? 'b-pending' : apiOk ? 'b-done' : 'b-failed'}`}>{apiOk === null ? 'memeriksa' : apiOk ? 'nyala' : 'gagal dihubungi'}</span></li>
+            <li className="has-link" title="Heartbeat adalah tanda worker masih hidup; diperbarui tiap siklus kerja."><Link className="sys-link" to="/monitoring"><span className="sys-ic"><Icon name="bot" size={15} /></span><span className="sys-label">Worker</span><span className={`badge ${workerBadge[0]}`}>{workerBadge[1]}</span></Link></li>
+            <li className="has-link" title="HP yang sedang terdeteksi ADB, dihitung ulang tiap 15 menit."><Link className="sys-link" to="/farm"><span className="sys-ic"><Icon name="phone" size={15} /></span><span className="sys-label">Phone Farm</span><span className={`badge ${farmFail ? 'b-failed' : (farm?.length || 0) > 0 ? 'b-done' : 'b-pending'}`}>{farmFail ? 'gagal dihubungi' : farm?.length ? `${farm.length} HP` : '0 HP'}</span></Link></li>
+            <li title={wd?.lastProbeAt ? 'Probe terakhir ' + ago(new Date(wd.lastProbeAt).toISOString()) : 'Probe tiap 10 menit'}><span className="sys-ic"><Icon name="clock" size={15} /></span><span className="sys-label">Jaga Farm</span><span className={`badge ${wd === null ? 'b-pending' : wd.alarmed ? 'b-failed' : wd.fails > 0 ? 'b-pending' : 'b-done'}`}>{wd === null ? 'memeriksa' : wd.alarmed ? 'alarm terkirim' : wd.fails > 0 ? `gagal ${wd.fails}× (baru)` : 'jaga tiap 10 mnt'}</span></li>
           </ul>
           {farm?.length > 0 && <div className="feed-time" style={{ marginTop: 8 }}>{farm[0].model || farm[0].id}{farm[0].battery ? ` · batre ${farm[0].battery}%` : ''}</div>}
         </div>
       </section>
 
-      <div className="card">
+      <div className="card dash-reveal">
         <div className="queue-head"><h3>Aktivitas Terakhir</h3>{logs.length > 0 && <span className="queue-count live-count"><span className="dot-live sm" /> live</span>}</div>
         {logs.length === 0 ? (
-          <p className="muted">Tidak ada aktivitas baru lewat 48 jam terakhir. <Link to="/history">Lihat riwayat penuh</Link></p>
+          <div className="activity-empty">
+            <svg className="activity-empty-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 7.5h16M4 12h10M4 16.5h7" />
+              <circle cx="17.5" cy="16.5" r="3.5" />
+              <path d="M17.5 14.8v1.9l1.2.8" />
+            </svg>
+            <p className="activity-empty-copy">Tidak ada aktivitas baru dalam 48 jam terakhir.</p>
+            <Link className="activity-history-link" to="/history">Lihat riwayat penuh</Link>
+          </div>
         ) : (
           <ul className="logs feed">
             {logs.map((l) => (

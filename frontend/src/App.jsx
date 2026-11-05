@@ -22,7 +22,9 @@ const Warming = lazy(() => import('./pages/Warming.jsx'));
 const Backup = lazy(() => import('./pages/Backup.jsx'));
 const AI = lazy(() => import('./pages/AI.jsx'));
 const Engagement = lazy(() => import('./pages/Engagement.jsx'));
+const Sop = lazy(() => import('./pages/Sop.jsx'));
 const Likes = lazy(() => import('./pages/Likes.jsx'));
+const Comments = lazy(() => import('./pages/Comments.jsx'));
 const AutoCreate = lazy(() => import('./pages/AutoCreate.jsx'));
 const Captcha = lazy(() => import('./pages/Captcha.jsx'));
 const Notifications = lazy(() => import('./pages/Notifications.jsx'));
@@ -54,10 +56,13 @@ export default function App() {
           <Route path="fleet" element={page(<Fleet />)} />
           <Route path="warming" element={page(<Warming />)} />
           <Route path="engagement" element={page(<Engagement />)} />
+          <Route path="sop" element={page(<Sop />)} />
           <Route path="backup" element={page(<Backup />)} />
           <Route path="ai" element={page(<AI />)} />
           <Route path="likes-fb" element={page(<Likes platform="fb" />)} />
           <Route path="likes-ig" element={page(<Likes platform="ig" />)} />
+          <Route path="comments-fb" element={page(<Comments platform="fb" />)} />
+          <Route path="comments-ig" element={page(<Comments platform="ig" />)} />
           <Route path="create-fb" element={page(<AutoCreate platform="fb" />)} />
           <Route path="create-ig" element={page(<AutoCreate platform="ig" />)} />
           <Route path="create-tiktok" element={page(<AutoCreate platform="tiktok" />)} />

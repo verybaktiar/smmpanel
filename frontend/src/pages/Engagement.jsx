@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { api, gateFor, gateLabel } from '../api.js';
+import { api, gateFor, gateLabel, quotaFor } from '../api.js';
 import SegTabs from '../KSeg.jsx';
 import '../ui.css';
 import './Engagement.css';
@@ -8,31 +8,83 @@ import './Engagement.css';
 // Tiga mode: komentar (FB/IG), DM (IG/FB Messenger), story (IG/FB).
 // DM = pesan langsung ke satu akun.
 const TABS = [
-  { id: 'comment', label: 'Komentar', icon: 'chat' },
-  { id: 'dm', label: 'Pesan Langsung', icon: 'bell' },
+  { id: 'comment', label: 'Komentar', icon: 'comment' },
+  { id: 'dm', label: 'Pesan Langsung', icon: 'dm' },
   { id: 'story', label: 'Story', icon: 'camera' },
 ];
 
 const ACTION_BY_TAB = { comment: 'comment', dm: 'dm', story: 'post' };
 
-function GateBox({ gate }) {
-  if (!gate) return null;
-  const ok = gate.ok === true;
-  const warn = gate.ok === null;
+function ActionIcon({ name, size = 17 }) {
+  const shapes = {
+    comment: <><path d="M20 11.5a7.5 7.5 0 0 1-7.5 7.5 8 8 0 0 1-3.8-.9L4 19.5l1-4.2A7.5 7.5 0 1 1 20 11.5Z" /><path d="M8.5 11.5h7M8.5 14.5h4" /></>,
+    dm: <><path d="m21 3-7.3 18-3.8-7.9L2 9.3 21 3Z" /><path d="M9.9 13.1 21 3" /></>,
+    story: <><rect x="3.5" y="3.5" width="17" height="17" rx="4" /><circle cx="12" cy="12" r="4" /><circle cx="17.3" cy="6.8" r=".8" fill="currentColor" /></>,
+    account: <><circle cx="12" cy="8" r="3.4" /><path d="M5 20c.8-3.4 3.1-5.1 7-5.1s6.2 1.7 7 5.1" /></>,
+    shield: <><path d="M12 3 19 6v5c0 4.3-2.6 7.7-7 10-4.4-2.3-7-5.7-7-10V6l7-3Z" /><path d="m9 12 2 2 4-4" /></>,
+    clock: <><circle cx="12" cy="12" r="8.5" /><path d="M12 7v5l3.2 2" /></>,
+  };
+  return <svg className="eng-icon" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{shapes[name] || shapes.account}</svg>;
+}
+
+function GateBox({ gate, account, loading }) {
+  const ok = gate?.ok === true;
+  const warn = gate?.ok == null;
+  const state = !account ? 'choose' : ok ? 'ok' : warn ? 'wait' : 'blocked';
+  const title = !account ? 'Pilih akun untuk cek izin' : ok ? 'Akun siap digunakan' : warn ? 'Sedang memeriksa izin' : 'Aksi belum diizinkan';
   return (
-    <div className={`gate-box ${ok ? 'ok' : warn ? 'bad warn' : 'bad'}`}>
-      <div className="gate-head">
-        <span className="gate-title">Gerbang Akun</span>
-        <span className={`pill ${ok ? 'p-done' : warn ? 'p-wait' : 'p-bad'}`}>
-          {ok ? 'Boleh jalan' : warn ? 'Status tak terbaca' : 'Ditolak'}
-        </span>
+    <section className={`eng-gate eng-gate-${state}`} aria-live="polite">
+      <span className="eng-gate-icon"><ActionIcon name="shield" size={19} /></span>
+      <div className="eng-gate-copy">
+        <strong>{loading ? 'Memeriksa akun…' : title}</strong>
+        <span>{!account ? 'Pilih akun aktif di atas. Kuota dan kesiapan akan muncul di sini.' : loading ? 'Mengambil status gate dan kuota warming.' : ok ? 'Gate warming dan cooldown mengizinkan aksi ini.' : gate ? gateLabel(gate.reasons || []) : 'Belum ada hasil pemeriksaan.'}</span>
       </div>
-      <div className="gate-reason">{gateLabel(gate.reasons || [])}</div>
-      {gate.detail && (
-        <div className="gate-detail">
-          {gate.detail.cooldown ? `Jeda wajib: ${gate.detail.cooldown} · ` : ''}
-          {gate.detail.warming && gate.detail.warming.reason ? `Warming: ${gate.detail.warming.reason}` : ''}
-        </div>
+      <span className="eng-gate-state">{!account ? 'BELUM DIPILIH' : ok ? 'SIAP' : warn ? 'CEK' : 'TERTUTUP'}</span>
+    </section>
+  );
+}
+
+const QUOTA_LABEL = { like: 'Like', comment: 'Komentar', post: 'Posting', dm: 'DM', story: 'Story', view: 'Lihat', follow: 'Ikuti' };
+
+// Papan tangga: tahap warming + kran aksi hari ini + sisa kuota per baris.
+// Sumber: /api/gate/:id/quota — dihitung dari skema tahap warming + pemakaian hari ini.
+function LadderBoard({ accountId }) {
+  const [quotaState, setQuotaState] = useState({ key: '', data: null });
+  const key = String(accountId || '');
+  const q = quotaState.key === key ? quotaState.data : null;
+  useEffect(() => {
+    if (!accountId) return undefined;
+    let live = true;
+    quotaFor(accountId).then((data) => { if (live) setQuotaState({ key: String(accountId), data }); }).catch(() => { if (live) setQuotaState({ key: String(accountId), data: null }); });
+    return () => { live = false; };
+  }, [accountId]);
+  if (!accountId) return null;
+  const rows = q ? Object.entries(q.quota || {}) : [];
+  return (
+    <div className="card ladder-card" aria-label="Papan tangga warming">
+      <h3>Tangga Warming</h3>
+      {!q ? (
+        <p className="muted" style={{ fontSize: 12 }}>Memuat kuota aksi…</p>
+      ) : (
+        <>
+          <p className="muted" style={{ fontSize: 12, margin: '0 0 10px' }}>
+            Tahap <strong>{q.stageName || q.stage || 'belum ditentukan'}</strong>
+            {q.warming ? '' : ' · tanpa rencana warming (bebas aksi, tetap lolos gate)'}
+          </p>
+          <div className="ladder-rows">
+            {rows.map(([action, v]) => (
+              <div key={action} className={`ladder-row ${v.open ? 'open' : 'closed'}`}>
+                <span className="ladder-ico" aria-hidden="true">{v.open ? '●' : '○'}</span>
+                <span className="ladder-label">{QUOTA_LABEL[action] || action}</span>
+                <span className="ladder-qty">
+                  {v.unlimited ? 'bebas'
+                    : v.source === 'stage_not_allowed' ? 'tertutup di tahap ini'
+                    : v.source === 'warming' ? `${v.used}/${v.max} hari ini` : 'tidak ada kuota'}
+                </span>
+              </div>
+            ))}
+          </div>
+        </>
       )}
     </div>
   );
@@ -42,8 +94,9 @@ export default function Engagement() {
   const navigate = useNavigate();
   const [tab, setTab] = useState('comment');
   const [accounts, setAccounts] = useState([]);
+  const [accountsLoading, setAccountsLoading] = useState(true);
   const [accId, setAccId] = useState('');
-  const [gate, setGate] = useState(null);
+  const [gateState, setGateState] = useState({ key: '', data: null });
   const [busy, setBusy] = useState(false);
   const [log, setLog] = useState([]); // {kind: ok|bad|info, text}
   const logRef = useRef(null);
@@ -66,19 +119,26 @@ export default function Engagement() {
   const addLog = (kind, text) => setLog((l) => [...l.slice(-80), { kind, text, at: new Date() }]);
 
   useEffect(() => {
-    (async () => {
-      const a = await api('/api/accounts');
-      if (Array.isArray(a)) setAccounts(a.filter((x) => x.status === 'active'));
-    })();
+    let live = true;
+    api('/api/accounts')
+      .then((a) => { if (live && Array.isArray(a)) setAccounts(a.filter((x) => x.status === 'active')); })
+      .catch(() => { if (live) addLog('bad', 'Daftar akun gagal dimuat. Muat ulang halaman untuk mencoba lagi.'); })
+      .finally(() => { if (live) setAccountsLoading(false); });
+    return () => { live = false; };
   }, []);
 
-  // Cek gate setiap akun/aksi berubah; tampilkan ALASAN sebelum user mencoba.
+  const gateKey = accId ? `${accId}:${ACTION_BY_TAB[tab]}` : '';
+  const gate = gateState.key === gateKey ? gateState.data : null;
+  const gateLoading = Boolean(gateKey && gateState.key !== gateKey);
+
+  // Cek gate setiap akun/aksi berubah; key mencegah izin aksi lama tampil saat request baru berjalan.
   useEffect(() => {
-    setGate(null);
-    if (!accId) return;
-    const action = ACTION_BY_TAB[tab];
+    if (!accId) return undefined;
     let live = true;
-    gateFor(accId, action).then((g) => { if (live) setGate(g); }).catch(() => {});
+    const key = `${accId}:${ACTION_BY_TAB[tab]}`;
+    gateFor(accId, ACTION_BY_TAB[tab])
+      .then((data) => { if (live) setGateState({ key, data }); })
+      .catch(() => { if (live) setGateState({ key, data: { ok: null, reasons: ['gate_tak_terbaca'] } }); });
     return () => { live = false; };
   }, [accId, tab]);
 
@@ -202,7 +262,7 @@ export default function Engagement() {
     else addLog('ok', 'Story terposting.');
   };
 
-  const canRun = accId && (!gate || gate.ok !== false) && !busy;
+  const canRun = Boolean(accId && !gateLoading && (!gate || gate.ok !== false) && !busy);
 
   // Lihat riwayat: ke tab Engagement History, terfilter akun terpilih bila ada.
   const goHistory = () => {
@@ -211,39 +271,55 @@ export default function Engagement() {
   };
 
   return (
-    <div>
-      <div className="acc-hero">
-        <div>
+    <main className="eng-page">
+      <header className="eng-hero">
+        <div className="eng-hero-copy">
+          <span className="eng-kicker">RUANG KERJA · AKSI SOSIAL</span>
           <h1 className="page-title">Engagement</h1>
-          <p className="page-sub" style={{ margin: 0 }}>
-            Komentar, pesan langsung, dan story via akun terpilih. Semua lewat gerbang kebijakan yang sama dengan order
-          </p>
+          <p className="page-sub">Kelola komentar, pesan langsung, dan story dari satu tempat.</p>
         </div>
-        <button className="btn-ghost" onClick={goHistory} title={accId ? `Riwayat akun ${sel?.name || ''}` : 'Riwayat semua akun'}>
-          Lihat Riwayat
+        <button className="eng-history" onClick={goHistory} title={accId ? `Riwayat akun ${sel?.name || ''}` : 'Riwayat semua akun'}>
+          <ActionIcon name="clock" size={16} /> Riwayat
         </button>
-      </div>
+      </header>
 
-      <div className="eng-tabs">
+      <section className="eng-account-bar" aria-label="Pilih akun pengirim">
+        <span className="eng-account-icon"><ActionIcon name="account" size={19} /></span>
+        <label className="eng-account-select" htmlFor="eng-account-select">
+          <span>Akun pengirim</span>
+          <select id="eng-account-select" className="inp" value={accId} onChange={(e) => setAccId(e.target.value)} disabled={accountsLoading || !accounts.length}>
+            <option value="">{accountsLoading ? 'Memuat akun…' : accounts.length ? 'Pilih akun aktif…' : 'Belum ada akun aktif'}</option>
+            {accounts.map((a) => <option key={a.id} value={a.id}>{a.name} · {a.platform === 'ig' ? 'Instagram' : 'Facebook'}</option>)}
+          </select>
+        </label>
+        <div className="eng-account-meta">
+          {sel ? <><span className={`eng-platform-dot ${sel.platform === 'ig' ? 'ig' : 'fb'}`} /><strong>{sel.name}</strong><span>{sel.platform === 'ig' ? 'Instagram' : 'Facebook'} · {sel.status}</span></> : <span>{accountsLoading ? 'Mengambil daftar akun' : accounts.length ? 'Pilih akun untuk melihat izin dan kuota' : 'Tambahkan akun sebelum memulai'}</span>}
+        </div>
+        {!accountsLoading && accounts.length === 0 && <button type="button" className="eng-add-account" onClick={() => navigate('/akun')}>Kelola akun</button>}
+      </section>
+      <GateBox gate={gate} account={sel} loading={gateLoading} />
+
+      <nav className="eng-tabs" aria-label="Jenis engagement">
         {TABS.map((t) => (
-          <button key={t.id} className={tab === t.id ? 'on' : ''} aria-pressed={tab === t.id} onClick={() => setTab(t.id)}>{t.label}</button>
+          <button key={t.id} className={tab === t.id ? 'on' : ''} aria-pressed={tab === t.id} onClick={() => setTab(t.id)}>
+            <ActionIcon name={t.id} size={17} /> <span>{t.label}</span>
+          </button>
         ))}
-      </div>
+      </nav>
 
-      <div className="eng-grid">
-        <div>
-          <GateBox gate={gate} />
-
+      <div className="eng-layout">
+        <section className="eng-compose">
           {tab === 'comment' && (
-            <div className="card">
-              <h3>Kirim Komentar</h3>
-              <label className="warm-arm" style={{ marginBottom: 10 }}>
+            <div className="eng-action-card">
+              <div className="eng-action-head"><span className="eng-action-icon comment"><ActionIcon name="comment" size={20} /></span><div><h2>Komentar</h2><p>Tulis komentar untuk satu post atau siapkan beberapa sekaligus.</p></div></div>
+              <label className="eng-batch-toggle">
                 <input type="checkbox" checked={batchMode} onChange={(e) => setBatchMode(e.target.checked)} />
-                <span>Mode batch <span className="muted">(banyak postingan sekaligus, variasi komentar AI per postingan)</span></span>
+                <span className="eng-toggle-ui" aria-hidden="true" />
+                <span className="eng-batch-copy"><strong>Mode batch</strong><small>Beberapa post, komentar bervariasi per URL.</small></span>
               </label>
               {batchMode ? (
                 <>
-                  <div className="f">Akun pengerjak (pilih 1 atau lebih; komentar dibagi bergiliran)
+                  <fieldset className="eng-fieldset"><legend>Akun pengerja</legend>
                     <div className="eng-chips">
                       {accounts.map((a) => {
                         const on = batchAccs.some((x) => x.id === a.id);
@@ -255,122 +331,72 @@ export default function Engagement() {
                         );
                       })}
                     </div>
-                    <span className="muted" style={{ fontSize: 11.5, marginTop: 4 }}>
-                      {batchAccs.length ? `${batchAccs.length} akun dipilih. Akun yang ditolak gerbang otomatis dilewati.` : 'Kosong = pakai akun di panel kanan'}
-                    </span>
-                  </div>
+                    <small className="eng-help">{batchAccs.length ? `${batchAccs.length} akun dipilih. Akun yang gagal gate akan dilewati.` : 'Pilih satu atau lebih. Jika kosong, akun pengirim di atas digunakan.'}</small>
+                  </fieldset>
                   {batchAccs.length > 1 && (
-                    <div className="f">
-                      Pola rotasi
+                    <div className="eng-field">
+                      <span className="eng-label">Pola pembagian</span>
                       <SegTabs
                         value={rotation}
                         onChange={setRotation}
-                        options={[['roundrobin', 'Bergilir (A,B,A,B)'], ['block', 'Bertahap (A,A,B,B)']]}
+                        options={[[`roundrobin`, `Bergilir`], [`block`, `Per akun`]]}
                       />
-                      <span className="muted" style={{ fontSize: 11.5 }}>
-                        {rotation === 'roundrobin'
-                          ? 'Komentar pindah-pindah antar akun. Aktivitas tiap akun terlihat lebih jarang.'
-                          : 'Satu akun selesaikan porsinya dulu, baru lanjut ke akun berikutnya.'}
-                      </span>
+                      <small className="eng-help">{rotation === 'roundrobin' ? 'Akun bergantian untuk setiap post.' : 'Selesaikan post akun pertama sebelum beralih.'}</small>
                     </div>
                   )}
-                  <label className="f">URL postingan (satu per baris, maks 20)
-                    <textarea className="inp" style={{ minHeight: 110 }} value={batchUrls} onChange={(e) => setBatchUrls(e.target.value)}
-                      placeholder={'https://instagram.com/p/xxx\nhttps://facebook.com/yyy/posts/zzz'} />
+                  <label className="eng-field"><span className="eng-label">URL post <small>maksimal 20, satu URL per baris</small></span>
+                    <textarea className="inp eng-textarea" style={{ minHeight: 110 }} value={batchUrls} onChange={(e) => setBatchUrls(e.target.value)}
+                      placeholder={'https://instagram.com/p/…\nhttps://facebook.com/…'} />
                   </label>
                 </>
               ) : (
-                <label className="f">URL postingan
-                  <input className="inp" value={comment.postUrl} onChange={(e) => setComment({ ...comment, postUrl: e.target.value })} placeholder="https://..." />
+                <label className="eng-field"><span className="eng-label">URL post</span>
+                  <input className="inp" value={comment.postUrl} onChange={(e) => setComment({ ...comment, postUrl: e.target.value })} placeholder="Tempel link post Instagram atau Facebook" />
                 </label>
               )}
-              <label className="f">{batchMode ? 'Teks khusus untuk SEMUA komentar (kosong = variasi AI per postingan)' : 'Teks komentar (kosong = otomatis dari AI atau template)'}
-                <textarea className="inp" value={comment.text} onChange={(e) => setComment({ ...comment, text: e.target.value })} placeholder={batchMode ? 'Kosongkan agar AI membuat variasi berbeda tiap postingan' : 'Mis. Keren banget ini!'} />
+              <label className="eng-field"><span className="eng-label">Komentar <small>{batchMode ? 'kosongkan untuk variasi otomatis' : 'kosongkan untuk teks otomatis'}</small></span>
+                <textarea className="inp eng-textarea" value={comment.text} onChange={(e) => setComment({ ...comment, text: e.target.value })} placeholder={batchMode ? 'Komentar akan dibuat bervariasi untuk setiap post…' : 'Tulis komentar atau biarkan sistem menyiapkan teks…'} />
               </label>
-              <button className="btn-primary" disabled={!canRun && !batchMode} onClick={runComment}>
-                {busy ? (batchMode ? 'Batch berjalan... (bisa beberapa menit)' : 'Mengirim...') : batchMode ? `Kirim Batch${batchAccs.length ? ` (${batchAccs.length} akun)` : ''}` : 'Kirim Komentar'}
-              </button>
-              <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>
-                Mode batch tidak menunggu gerbang per akun di panel. Akun yang ditolak otomatis dilewati.
-              </p>
+              <div className="eng-submit-row"><button className="eng-submit" disabled={busy || (batchMode ? (!batchAccs.length && !accId) : !canRun)} onClick={runComment}>
+                {busy ? (batchMode ? 'Batch sedang berjalan…' : 'Mengirim…') : batchMode ? `Kirim batch${batchAccs.length ? ` · ${batchAccs.length} akun` : ''}` : 'Kirim komentar'}
+              </button>{batchMode && <span className="eng-submit-note">Gate dicek per akun di server.</span>}</div>
             </div>
           )}
 
           {tab === 'dm' && (
-            <div className="card">
-              <h3>Kirim Pesan Langsung</h3>
-              <label className="f">Username tujuan
-                <input className="inp" value={dm.username} onChange={(e) => setDm({ ...dm, username: e.target.value })} placeholder="mis. jaguarku16" />
-              </label>
-              <label className="f">Pesan
-                <textarea className="inp" value={dm.message} onChange={(e) => setDm({ ...dm, message: e.target.value })} placeholder="Isi pesan..." />
-              </label>
-              <p className="muted" style={{ fontSize: 12 }}>
-                DM paling mudah ketahuan filter spam. Batasi 1 akun maksimal beberapa DM per hari.
-              </p>
-              <button className="btn-primary" disabled={!canRun} onClick={runDM}>{busy ? 'Mengirim...' : 'Kirim DM'}</button>
+            <div className="eng-action-card">
+              <div className="eng-action-head"><span className="eng-action-icon dm"><ActionIcon name="dm" size={20} /></span><div><h2>Pesan langsung</h2><p>Kirim satu pesan ke username tujuan.</p></div></div>
+              <label className="eng-field"><span className="eng-label">Username tujuan</span><input className="inp" value={dm.username} onChange={(e) => setDm({ ...dm, username: e.target.value })} placeholder="Contoh: nama_pengguna" /></label>
+              <label className="eng-field"><span className="eng-label">Pesan</span><textarea className="inp eng-textarea" value={dm.message} onChange={(e) => setDm({ ...dm, message: e.target.value })} placeholder="Tulis pesan yang relevan dan personal…" /></label>
+              <p className="eng-caution">Pesan dibatasi oleh status akun dan gerbang warming.</p>
+              <button className="eng-submit" disabled={!canRun} onClick={runDM}>{busy ? 'Mengirim…' : 'Kirim pesan'}</button>
             </div>
           )}
 
           {tab === 'story' && (
-            <div className="card">
-              <h3>Posting Story</h3>
-              <label className="f">Platform story
-                <select className="inp" value={story.platform} onChange={(e) => setStory({ ...story, platform: e.target.value })}>
-                  <option value="ig">Instagram</option>
-                  <option value="fb">Facebook</option>
-                </select>
-              </label>
-              <div className="f">Media (gambar/video)
-                <div className="story-file">
-                  <button type="button" className="btn-ghost" onClick={() => document.getElementById('eng-story-file')?.click()}>Pilih File</button>
-                  <span className="file-name">{file ? file.name : 'Belum ada file'}</span>
-                  <input id="eng-story-file" type="file" hidden accept="image/*,video/*" onChange={(e) => setFile(e.target.files[0] || null)} />
-                </div>
+            <div className="eng-action-card">
+              <div className="eng-action-head"><span className="eng-action-icon story"><ActionIcon name="story" size={20} /></span><div><h2>Story</h2><p>Pilih media untuk dibagikan ke story.</p></div></div>
+              <label className="eng-field"><span className="eng-label">Platform</span><select className="inp" value={story.platform} onChange={(e) => setStory({ ...story, platform: e.target.value })}><option value="ig">Instagram</option><option value="fb">Facebook</option></select></label>
+              <div className="eng-field"><span className="eng-label">Media <small>gambar atau video</small></span>
+                <label className={`eng-upload ${file ? 'has-file' : ''}`} htmlFor="eng-story-file"><input id="eng-story-file" type="file" accept="image/*,video/*" onChange={(e) => setFile(e.target.files[0] || null)} /><span className="eng-upload-icon"><ActionIcon name="story" size={19} /></span><span className="eng-upload-copy"><strong>{file ? file.name : 'Pilih file media'}</strong><small>{file ? `${(file.size / 1024 / 1024).toFixed(1)} MB · klik untuk mengganti` : 'PNG, JPG atau video dari perangkat'}</small></span><span className="eng-upload-action">Pilih</span></label>
               </div>
-              <label className="f">Caption / teks story (opsional)
-                <input className="inp" value={story.caption} onChange={(e) => setStory({ ...story, caption: e.target.value })} />
-              </label>
-              <button className="btn-primary" disabled={!canRun} onClick={runStory}>{busy ? 'Memposting...' : 'Posting Story'}</button>
+              <label className="eng-field"><span className="eng-label">Caption <small>opsional</small></span><input className="inp" value={story.caption} onChange={(e) => setStory({ ...story, caption: e.target.value })} placeholder="Tambahkan konteks singkat…" /></label>
+              <button className="eng-submit" disabled={!canRun} onClick={runStory}>{busy ? 'Memposting…' : 'Bagikan story'}</button>
             </div>
           )}
-        </div>
+        </section>
 
-        <div>
-          <div className="card">
-            <h3>Akun</h3>
-            <select className="inp" value={accId} onChange={(e) => setAccId(e.target.value)}>
-              <option value="">Pilih akun aktif...</option>
-              {accounts.map((a) => (
-                <option key={a.id} value={a.id}>{a.name} ({a.platform === 'ig' ? 'Instagram' : 'Facebook'})</option>
-              ))}
-            </select>
-            {sel && (
-              <p className="muted" style={{ fontSize: 12, margin: '8px 0 0' }}>
-                {sel.name} · status {sel.status} · {sel.platform === 'ig' ? 'Instagram' : 'Facebook'}
-              </p>
+        <aside className="eng-aside">
+          {accId && <LadderBoard accountId={accId} />}
+          <section className="eng-log-card">
+            <div className="eng-side-head"><span><ActionIcon name="clock" size={16} /> Aktivitas sesi</span><span className="eng-log-count">{log.length}</span></div>
+            {log.length === 0 ? <div className="eng-log-empty"><span className="eng-empty-icon"><ActionIcon name="comment" size={20} /></span><strong>Belum ada aktivitas</strong><p>Hasil aksi di sesi ini akan muncul di sini.</p></div> : (
+              <div className="eng-log" ref={logRef} aria-live="polite">{log.map((l, i) => <div key={i} className={`eng-log-line l-${l.kind}`}><time>{l.at.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</time><span>{l.text}</span></div>)}</div>
             )}
-          </div>
-
-          <div className="card">
-            <h3>Log Aktivitas</h3>
-            <p className="muted" style={{ fontSize: 12, margin: '0 0 8px' }}>
-              Log ini hanya tampil di halaman ini. Riwayat permanen ada di menu Riwayat.
-            </p>
-            {log.length === 0 ? (
-              <p className="muted">Belum ada aksi di sesi ini.</p>
-            ) : (
-              <div className="eng-log" ref={logRef}>
-                {log.map((l, i) => (
-                  <div key={i} className={`l-${l.kind}`}>
-                    [{l.at.toLocaleTimeString('id-ID')}] {l.text}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
+            <button className="eng-log-history" type="button" onClick={goHistory}>Buka riwayat lengkap</button>
+          </section>
+        </aside>
       </div>
-    </div>
+    </main>
   );
 }

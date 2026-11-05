@@ -15,11 +15,41 @@ const pillLabel = (s) => {
   return s || 'Lainnya';
 };
 
+// Umur data relatif, dipakai kolom heartbeat worker.
+function ago(dt) {
+  if (!dt) return 'belum pernah';
+  const s = Math.round((Date.now() - new Date(dt).getTime()) / 1000);
+  if (s < 60) return `${s} dtk lalu`;
+  if (s < 3600) return `${Math.floor(s / 60)} mnt lalu`;
+  if (s < 86400) return `${Math.floor(s / 3600)} jam lalu`;
+  return `${Math.floor(s / 86400)} hari lalu`;
+}
+
+// Uptime detik jadi teks pendek.
+function dur(sec) {
+  const s = Number(sec) || 0;
+  if (s < 60) return `${s} dtk`;
+  if (s < 3600) return `${Math.floor(s / 60)} mnt`;
+  if (s < 86400) return `${Math.floor(s / 3600)} jam`;
+  return `${Math.floor(s / 86400)} hari`;
+}
+
+// Status registry worker PG -> label Indonesia + kelas pill.
+function workerPill(st) {
+  const s = String(st || '').toUpperCase();
+  if (s === 'HEALTHY') return ['p-done', 'Sehat'];
+  if (s === 'WARNING') return ['p-warn', 'Heartbeat terlambat'];
+  if (s === 'UNHEALTHY') return ['p-bad', 'Mati'];
+  if (s === 'STOPPED') return ['p-wait', 'Dihentikan'];
+  return ['p-wait', st || '–'];
+}
+
 export default function Monitoring() {
   const [stats, setStats] = useState(null);
   const [accounts, setAccounts] = useState([]);
   const [farm, setFarm] = useState(null);
   const [logs, setLogs] = useState([]);
+  const [workers, setWorkers] = useState(null); // null = belum diperiksa, false = PG/registry tak tersedia
   const [eng, setEng] = useState(null); // statistik engagement harian
   const [engDays, setEngDays] = useState(14); // rentang grafik: 7 | 14 | 30 | 90
   const [updated, setUpdated] = useState(null);
@@ -29,16 +59,21 @@ export default function Monitoring() {
   const load = async () => {
     let ok = 0;
     // api() tidak melempar untuk HTTP error (balik {error}), jadi kegagalan dihitung dari r.error juga.
-    const [s, a, f, l] = await Promise.all([
+    const [s, a, f, l, w] = await Promise.all([
       api('/api/stats').then((r) => { if (r && !r.error) ok++; return r; }).catch(() => null),
       api('/api/accounts').then((r) => { if (r && !r.error) ok++; return r; }).catch(() => []),
       api('/api/farm/devices').then((r) => { if (r && !r.error) ok++; return r; }).catch(() => null),
       api('/api/logs').then((r) => { if (r && !r.error) ok++; return r; }).catch(() => []),
+      api('/api/workers/status').catch(() => false), // 503 saat PG mati -> false
     ]);
     if (s && !s.error) setStats(s);
     if (Array.isArray(a)) setAccounts(a);
     if (Array.isArray(f)) setFarm(f);
     if (Array.isArray(l)) setLogs(l);
+    // Worker sengaja tidak dihitung ke `ok`: kegagalannya sudah punya state jujur
+    // di kartu Worker sendiri, dan tidak boleh menutup banner error sumber lain.
+    const wOk = !!w && !w.error;
+    setWorkers(wOk ? w : false);
     setUpdated(new Date());
     // Halaman ini auto-refresh 15 dtk, jadi gagal sesaat tidak perlu alarm;
     // tapi gagal total saat data masih kosong = error state dengan Coba lagi.
@@ -79,6 +114,23 @@ export default function Monitoring() {
   ];
   const activePct = accounts.length ? Math.round((active / accounts.length) * 100) : 0;
 
+  // Registry worker PG: heartbeat adalah tanda worker masih hidup. Baris dengan
+  // last_seen > 24 jam sudah pasti mati, jadi tidak ikut menghitung "sehat".
+  const workerList = workers && workers.workers ? workers.workers : [];
+  const workerSeen24 = workerList.filter((x) => x.last_seen && new Date(x.last_seen).getTime() > dayAgo);
+  const workerHealthy = workerSeen24.filter((x) => String(x.status || '').toUpperCase() === 'HEALTHY').length;
+  const workerSummary = workers === null ? 'memeriksa'
+    : workers === false ? 'gagal dihubungi'
+      : workerList.length === 0 ? 'belum pernah jalan'
+        : workerSeen24.length === 0 ? 'mati > 24 jam'
+          : `${workerHealthy}/${workerSeen24.length} sehat`;
+  const workerBadgeCls = workers === null ? 'b-pending'
+    : workers === false ? 'b-failed'
+      : workerList.length === 0 ? 'b-inactive'
+        : workerSeen24.length === 0 ? 'b-failed'
+          : workerHealthy > 0 ? 'b-done' : 'b-failed';
+  const wq = workers && workers.queue ? workers.queue : null;
+
   return (
     <div>
       <div className="acc-hero">
@@ -107,6 +159,52 @@ export default function Monitoring() {
             <span className={`dot ${s.ok ? 'on' : 'off'}`} />
           </div>
         ))}
+      </div>
+
+      <div className="card">
+        <div className="mon-chead">
+          <h3><Icon name="bot" size={17} /> Worker</h3>
+          <span className={`badge ${workerBadgeCls}`}>{workerSummary}</span>
+        </div>
+        {workers === null ? (
+          <p className="muted">Memeriksa registry worker...</p>
+        ) : workers === false ? (
+          <p className="muted">Registry worker tidak bisa dihubungi. Worker butuh PostgreSQL aktif, lalu dijalankan terpisah dari panel dengan <b>npm run worker</b>.</p>
+        ) : workerList.length === 0 ? (
+          <p className="muted">Belum ada worker yang pernah mendaftar. Nyalakan dengan <b>npm run worker</b> di terminal, atau <b>start.bat</b> untuk menyalakan semua layanan sekaligus.</p>
+        ) : (
+          <>
+            <div className="table-wrap">
+              <table className="tbl">
+                <thead><tr><th>Worker</th><th>Status</th><th>Heartbeat</th><th>Uptime</th><th>Restart</th></tr></thead>
+                <tbody>
+                  {workerList.map((x) => {
+                    const [pc, pl] = workerPill(x.status);
+                    return (
+                      <tr key={x.worker_id}>
+                        <td><b>{x.worker_id}</b></td>
+                        <td><span className={`pill ${pc}`}>{pl}</span></td>
+                        <td className="muted">{x.last_seen ? ago(x.last_seen) : 'belum pernah'}</td>
+                        <td className="muted">{x.uptime_s ? dur(x.uptime_s) : '–'}</td>
+                        <td className="muted">{x.restart_count || 0}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            {workerSeen24.length === 0 && (
+              <p className="muted" style={{ fontSize: 12.5, margin: '10px 0 0' }}>
+                Tidak ada heartbeat dalam 24 jam. Nyalakan worker dengan <b>npm run worker</b>, atau <b>start.bat</b>.
+              </p>
+            )}
+            {wq && (
+              <p className="muted" style={{ fontSize: 12.5, margin: '10px 0 0' }}>
+                Antrean PG: {wq.PENDING || 0} menunggu · {wq.ASSIGNED || 0} assigned · {wq.RUNNING || 0} jalan
+              </p>
+            )}
+          </>
+        )}
       </div>
 
       <div className="grid2">
