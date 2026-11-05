@@ -16,15 +16,34 @@ const fmtTime = (v) => {
   return isNaN(d) ? (v || '–') : d.toLocaleString('id-ID', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 };
 const typeLabel = (t) => String(t || '').toLowerCase() === 'manual' ? 'Manual' : 'Otomatis';
+// Umur backup dibulatkan ke satuan yang paling berguna dibaca sekilas.
+const umurTeks = (jam) => {
+  if (jam === null || jam === undefined) return '–';
+  if (jam < 1) return 'kurang dari 1 jam lalu';
+  if (jam < 24) return `${Math.round(jam)} jam lalu`;
+  return `${Math.round(jam / 24)} hari lalu`;
+};
 
 export default function Backup() {
   const [list, setList] = useState(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(null);
+  const [gh, setGh] = useState(null);
+  const [ghErr, setGhErr] = useState(null);
 
   const load = async () => {
     const r = await api('/api/backup/list');
     if (Array.isArray(r)) setList(r);
+    // Status backup harian ke GitHub: yang dibaca adalah hasil push terakhir,
+    // bukan umur file lokal, supaya tidak tampak aman padahal gagal terkirim.
+    try {
+      const s = await api('/api/backup/status');
+      if (s && s.error) { setGh(null); setGhErr(s.error); }
+      else { setGh(s || null); setGhErr(null); }
+    } catch (e) {
+      setGh(null);
+      setGhErr('status tidak terbaca');
+    }
   };
   useEffect(() => { load(); }, []);
 
@@ -67,6 +86,34 @@ export default function Backup() {
       </div>
 
       {msg && <p className={`farm-msg ${msg.ok ? 'ok' : 'bad'}`}>{msg.text}</p>}
+
+      <div className="card">
+        <div className="gh-head">
+          <h3>Backup ke GitHub</h3>
+          {gh && (
+            <span className={`pill ${gh.status === 'ok' ? 'p-run' : gh.status === 'telat' ? 'p-bad' : 'p-wait'}`}>
+              {gh.status === 'ok' ? 'Aman' : gh.status === 'telat' ? 'Terlambat' : 'Belum pernah'}
+            </span>
+          )}
+        </div>
+
+        {ghErr ? (
+          <p className="muted">Status tidak terbaca: {ghErr}</p>
+        ) : !gh ? (
+          <p className="muted">Memuat status...</p>
+        ) : gh.status === 'belum-pernah' ? (
+          <p className="muted">Belum ada snapshot yang terkirim. Jalankan <code>node scripts/backup-github.js</code> sekali dari folder proyek.</p>
+        ) : (
+          <dl className="gh-grid">
+            <div><dt>Snapshot</dt><dd>{gh.snapshot || '–'}</dd></div>
+            <div><dt>Terkirim</dt><dd>{fmtTime(gh.terakhir)} <span className="muted">({umurTeks(gh.umurJam)})</span></dd></div>
+            <div><dt>Isi</dt><dd>{gh.jumlahJob === null || gh.jumlahJob === undefined ? '–' : `${gh.jumlahJob} job`}</dd></div>
+            <div><dt>Batas umur</dt><dd>{gh.batasHari} hari</dd></div>
+          </dl>
+        )}
+
+        <p className="muted gh-note">Isi snapshot dienkripsi sebelum dikirim. Backup berjalan tiap hari pukul 23:30 lewat tugas "SMMPanel Backup Harian".</p>
+      </div>
 
       <div className="card table-wrap">
         <h3>Daftar ({list === null ? '…' : list.length})</h3>
